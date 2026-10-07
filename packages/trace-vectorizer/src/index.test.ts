@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deflateSync } from 'node:zlib';
 import * as api from './index.js';
-import { init } from './wasm.js';
+import { init, isNode } from './wasm.js';
 
 function crc32(buf: Uint8Array): number {
   let c = ~0;
@@ -70,6 +70,17 @@ describe('module surface', () => {
 
   it('trace() rejects unsupported input', async () => {
     await expect(api.trace({} as never)).rejects.toThrow(TypeError);
+  });
+});
+
+describe('isNode', () => {
+  it('detects environments', () => {
+    expect(isNode()).toBe(true);
+    expect(isNode({})).toBe(false);
+    expect(isNode({ process: { versions: { node: '20' } }, window: {} })).toBe(false);
+    expect(isNode({ process: { versions: { node: '20' } }, importScripts: () => {} })).toBe(false);
+    expect(isNode({ process: { versions: {} } })).toBe(false);
+    expect(isNode({ process: { versions: { node: '20' } } })).toBe(true);
   });
 });
 
