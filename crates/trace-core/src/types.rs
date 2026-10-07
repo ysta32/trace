@@ -3,23 +3,44 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
-pub enum Preset { #[default] Auto, Logo, Lineart, Pixelart, Photo, Icon }
+pub enum Preset {
+    #[default]
+    Auto,
+    Logo,
+    Lineart,
+    Pixelart,
+    Photo,
+    Icon,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
-pub enum Mode { #[default] Stacked, Cutout }
+pub enum Mode {
+    #[default]
+    Stacked,
+    Cutout,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum CurveMode { Spline, Polygon, Pixel }
+pub enum CurveMode {
+    Spline,
+    Polygon,
+    Pixel,
+}
 
 /// `colors`: number or "auto". `upscale`: "auto" or 1|2|4.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum AutoOr<T> { Auto(AutoTag), Value(T) }
+pub enum AutoOr<T> {
+    Auto(AutoTag),
+    Value(T),
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum AutoTag { Auto }
+pub enum AutoTag {
+    Auto,
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -39,17 +60,38 @@ pub struct TraceOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GradientStop { pub offset: f32, pub color: String }
+pub struct GradientStop {
+    pub offset: f32,
+    pub color: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GradientDef { pub id: String, pub x1: f32, pub y1: f32, pub x2: f32, pub y2: f32, pub stops: Vec<GradientStop> }
+pub struct GradientDef {
+    pub id: String,
+    pub x1: f32,
+    pub y1: f32,
+    pub x2: f32,
+    pub y2: f32,
+    pub stops: Vec<GradientStop>,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Shape { pub id: u32, pub fill: String, pub color_index: i32, pub d: String }
+pub struct Shape {
+    pub id: u32,
+    pub fill: String,
+    pub color_index: i32,
+    pub d: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TraceStats { pub paths: u32, pub nodes: u32, pub colors: u32, pub ms: f64, pub preset: Preset }
+pub struct TraceStats {
+    pub paths: u32,
+    pub nodes: u32,
+    pub colors: u32,
+    pub ms: f64,
+    pub preset: Preset,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

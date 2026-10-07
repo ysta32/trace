@@ -12,11 +12,21 @@ fn quant(w: u32, h: u32, ncol: usize, f: impl Fn(u32, u32) -> u16) -> Quantized 
         }
     }
     let palette = (0..ncol).map(|i| [(i * 40) as u8, 0, 0]).collect();
-    Quantized { width: w, height: h, palette, labels }
+    Quantized {
+        width: w,
+        height: h,
+        palette,
+        labels,
+    }
 }
 
 fn params(mode: Mode, curve: CurveMode, speckle: u32) -> VecParams {
-    VecParams { mode, curve_mode: curve, filter_speckle: speckle, ..VecParams::default() }
+    VecParams {
+        mode,
+        curve_mode: curve,
+        filter_speckle: speckle,
+        ..VecParams::default()
+    }
 }
 
 /// Parses polygon-only path data (M/m/L/l/H/h/V/v/Z/z) into subpaths.
@@ -47,7 +57,9 @@ fn parse_poly(d: &str) -> Vec<Vec<(f64, f64)>> {
     let mut cmd = ' ';
     let mut i = 0;
     let num = |i: &mut usize| -> f64 {
-        let v: f64 = toks[*i].parse().unwrap_or_else(|_| panic!("bad number {:?} in {d}", toks[*i]));
+        let v: f64 = toks[*i]
+            .parse()
+            .unwrap_or_else(|_| panic!("bad number {:?} in {d}", toks[*i]));
         *i += 1;
         v
     };
@@ -65,7 +77,11 @@ fn parse_poly(d: &str) -> Vec<Vec<(f64, f64)>> {
         match cmd {
             'M' | 'm' => {
                 let (a, b) = (num(&mut i), num(&mut i));
-                if cmd == 'M' { (x, y) = (a, b) } else { (x, y) = (x + a, y + b) }
+                if cmd == 'M' {
+                    (x, y) = (a, b)
+                } else {
+                    (x, y) = (x + a, y + b)
+                }
                 (sx, sy) = (x, y);
                 subs.push(vec![(x, y)]);
                 cmd = if cmd == 'M' { 'L' } else { 'l' };
@@ -141,10 +157,18 @@ fn red_circle_on_white_spline() {
     let q = circle(64);
     for mode in [Mode::Stacked, Mode::Cutout] {
         let shapes = vectorize(&q, &params(mode, CurveMode::Spline, 4));
-        assert!(!shapes.is_empty() && shapes.len() <= 3, "{mode:?}: {} shapes", shapes.len());
+        assert!(
+            !shapes.is_empty() && shapes.len() <= 3,
+            "{mode:?}: {} shapes",
+            shapes.len()
+        );
         for s in &shapes {
             assert!(!s.d.is_empty() && s.nodes > 0);
-            assert!(s.d.contains('C') || s.d.contains('c'), "spline output should have cubics: {}", s.d);
+            assert!(
+                s.d.contains('C') || s.d.contains('c'),
+                "spline output should have cubics: {}",
+                s.d
+            );
         }
         let circ = shapes.iter().find(|s| s.color_index == 1).expect("circle shape");
         assert_eq!(subpath_count(&circ.d), 1);
@@ -198,11 +222,15 @@ fn ring_has_hole() {
 }
 
 fn sprite() -> Quantized {
-    const S: [&str; 8] = ["..####..", ".#oooo#.", "#o#oo#o#", "#oooooo#", "#o#oo#o#", "#oo##oo#", ".#oooo#.", "..####.."];
-    quant(64, 64, 3, |x, y| match S[(y / 8) as usize].as_bytes()[(x / 8) as usize] {
-        b'.' => 0,
-        b'#' => 1,
-        _ => 2,
+    const S: [&str; 8] = [
+        "..####..", ".#oooo#.", "#o#oo#o#", "#oooooo#", "#o#oo#o#", "#oo##oo#", ".#oooo#.", "..####..",
+    ];
+    quant(64, 64, 3, |x, y| {
+        match S[(y / 8) as usize].as_bytes()[(x / 8) as usize] {
+            b'.' => 0,
+            b'#' => 1,
+            _ => 2,
+        }
     })
 }
 
@@ -213,7 +241,11 @@ fn pixel_art_axis_aligned_and_exact() {
         let shapes = vectorize(&q, &params(mode, CurveMode::Pixel, 0));
         assert!(!shapes.is_empty());
         for s in &shapes {
-            assert!(s.d.chars().all(|c| "MmHhVvZ0123456789.- ".contains(c)), "non-axis command in {}", s.d);
+            assert!(
+                s.d.chars().all(|c| "MmHhVvZ0123456789.- ".contains(c)),
+                "non-axis command in {}",
+                s.d
+            );
             for sub in parse_poly(&s.d) {
                 for k in 0..sub.len() {
                     let (a, b) = (sub[k], sub[(k + 1) % sub.len()]);
@@ -232,7 +264,9 @@ fn pixel_art_axis_aligned_and_exact() {
 #[test]
 fn pixel_mode_minimal_outline() {
     // A single 8x8 block: exactly 4 vertices.
-    let q = quant(16, 16, 2, |x, y| u16::from((4..12).contains(&x) && (4..12).contains(&y)));
+    let q = quant(16, 16, 2, |x, y| {
+        u16::from((4..12).contains(&x) && (4..12).contains(&y))
+    });
     let shapes = vectorize(&q, &params(Mode::Cutout, CurveMode::Pixel, 0));
     let block = shapes.iter().find(|s| s.color_index == 1).unwrap();
     assert_eq!(block.nodes, 4);
@@ -260,7 +294,11 @@ fn stacked_covers_whole_canvas() {
     for curve in [CurveMode::Pixel, CurveMode::Polygon, CurveMode::Spline] {
         let shapes = vectorize(&q, &params(Mode::Stacked, curve, 6));
         assert!(!shapes.is_empty());
-        assert_eq!(subpath_count(&shapes[0].d), 1, "{curve:?} bottom layer is a solid outline");
+        assert_eq!(
+            subpath_count(&shapes[0].d),
+            1,
+            "{curve:?} bottom layer is a solid outline"
+        );
         if curve == CurveMode::Pixel {
             let r = raster(&shapes, 48, 40, 1.0);
             assert!(r.iter().all(|c| c.is_some()), "gap in stacked output");
@@ -286,13 +324,20 @@ fn transparent_and_tiny_inputs() {
     }
     let q = quant(1, 1, 1, |_, _| 0);
     let _ = vectorize(&q, &params(Mode::Stacked, CurveMode::Spline, 0));
-    let empty = Quantized { width: 0, height: 0, palette: vec![], labels: vec![] };
+    let empty = Quantized {
+        width: 0,
+        height: 0,
+        palette: vec![],
+        labels: vec![],
+    };
     assert!(vectorize(&empty, &VecParams::default()).is_empty());
 }
 
 #[test]
 fn speckle_filter_drops_small_clusters() {
-    let q = quant(32, 32, 2, |x, y| u16::from((x == 3 && y == 3) || ((10..20).contains(&x) && (10..20).contains(&y))));
+    let q = quant(32, 32, 2, |x, y| {
+        u16::from((x == 3 && y == 3) || ((10..20).contains(&x) && (10..20).contains(&y)))
+    });
     let shapes = vectorize(&q, &params(Mode::Cutout, CurveMode::Pixel, 4));
     let fg: Vec<_> = shapes.iter().filter(|s| s.color_index == 1).collect();
     assert_eq!(fg.len(), 1);
@@ -315,19 +360,35 @@ fn svgpath_number_formatting() {
 
 #[test]
 fn svgpath_compact_relative_and_rounding() {
-    let sq = Subpath::Polygon(vec![(100.0, 100.0), (101.0, 100.0), (102.0, 100.0), (102.0, 102.0), (100.0, 102.0), (100.0, 100.0)]);
+    let sq = Subpath::Polygon(vec![
+        (100.0, 100.0),
+        (101.0, 100.0),
+        (102.0, 100.0),
+        (102.0, 102.0),
+        (100.0, 102.0),
+        (100.0, 100.0),
+    ]);
     let (d, n) = format_path(&[sq], 1.0);
     assert_eq!(d, "M100 100h2v2h-2Z");
     assert_eq!(n, 4);
     let tri = Subpath::Polygon(vec![(0.0, 0.0), (1.004, 0.5), (0.333, 1.0)]);
     let (d, _) = format_path(&[tri], 1.0);
     assert_eq!(d, "M0 0 1 .5.33 1Z");
-    let cub = Subpath::Cubic { start: (10.0, 10.0), segs: vec![[(11.0, 10.0), (12.0, 11.0), (12.0, 12.0)], [(12.0, 13.0), (11.0, 14.0), (10.0, 10.0)]] };
+    let cub = Subpath::Cubic {
+        start: (10.0, 10.0),
+        segs: vec![
+            [(11.0, 10.0), (12.0, 11.0), (12.0, 12.0)],
+            [(12.0, 13.0), (11.0, 14.0), (10.0, 10.0)],
+        ],
+    };
     let (d, n) = format_path(&[cub], 0.5);
     assert_eq!(n, 3);
     assert!(d.starts_with("M5 5c.5 0 1 .5 1 1"), "{d}");
     assert!(d.ends_with('Z'));
-    assert_eq!(merge_collinear(vec![(0, 0), (1, 0), (2, 0), (2, 2), (0, 2), (0, 1)]), vec![(0, 0), (2, 0), (2, 2), (0, 2)]);
+    assert_eq!(
+        merge_collinear(vec![(0, 0), (1, 0), (2, 0), (2, 2), (0, 2), (0, 1)]),
+        vec![(0, 0), (2, 0), (2, 2), (0, 2)]
+    );
 }
 
 #[test]

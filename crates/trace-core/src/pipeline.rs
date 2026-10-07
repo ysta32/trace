@@ -3,7 +3,9 @@ use crate::analyze::{analyze, detect_pixel_scale};
 use crate::gradient::fit_linear_gradient;
 use crate::preprocess::{denoise, limit_size, upscale};
 use crate::quantize::{auto_k, quantize, Quantized, TRANSPARENT};
-use crate::types::{AutoOr, CurveMode, GradientDef, GradientStop, Mode, Preset, Shape, TraceOptions, TraceResult, TraceStats};
+use crate::types::{
+    AutoOr, CurveMode, GradientDef, GradientStop, Mode, Preset, Shape, TraceOptions, TraceResult, TraceStats,
+};
 use crate::vectorize::{length_threshold_for_simplify, speckle_factor_for_simplify, vectorize, VecParams};
 use image::RgbaImage;
 
@@ -62,8 +64,18 @@ pub fn preset_defaults(p: Preset) -> PresetDefaults {
     };
     match p {
         Preset::Auto | Preset::Logo => base,
-        Preset::Icon => PresetDefaults { filter_speckle: 4, simplify: 0.1, ..base },
-        Preset::Lineart => PresetDefaults { colors: (2, 4), denoise: 0.4, filter_speckle: 6, simplify: 0.3, ..base },
+        Preset::Icon => PresetDefaults {
+            filter_speckle: 4,
+            simplify: 0.1,
+            ..base
+        },
+        Preset::Lineart => PresetDefaults {
+            colors: (2, 4),
+            denoise: 0.4,
+            filter_speckle: 6,
+            simplify: 0.3,
+            ..base
+        },
         Preset::Pixelart => PresetDefaults {
             colors: (2, 64),
             denoise: 0.0,
@@ -119,7 +131,11 @@ fn downscale_nearest(img: &RgbaImage, s: u32) -> RgbaImage {
 /// downscale, times the limit_size factor).
 pub fn speckle_area_working(side_original: f64, divisor: f64) -> u32 {
     let a = (side_original.max(0.0) * divisor).powi(2).round();
-    if a.is_finite() { a.min(u32::MAX as f64) as u32 } else { 0 }
+    if a.is_finite() {
+        a.min(u32::MAX as f64) as u32
+    } else {
+        0
+    }
 }
 
 /// Palette index covering >60% of the border, if any.
@@ -149,7 +165,10 @@ pub fn detect_background(q: &Quantized) -> Option<usize> {
             add(w - 1, y);
         }
     }
-    let (best, n) = counts.iter().enumerate().max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(&a.0)))?;
+    let (best, n) = counts
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(&a.0)))?;
     (*n as f64 > 0.6 * total as f64).then_some(best)
 }
 
@@ -161,7 +180,13 @@ fn empty_result(w: u32, h: u32, preset: Preset, clock: &Clock) -> TraceResult {
         background: None,
         shapes: Vec::new(),
         gradients: Vec::new(),
-        stats: TraceStats { paths: 0, nodes: 0, colors: 0, ms: clock.ms(), preset },
+        stats: TraceStats {
+            paths: 0,
+            nodes: 0,
+            colors: 0,
+            ms: clock.ms(),
+            preset,
+        },
     }
 }
 
@@ -170,14 +195,32 @@ pub fn trace(img: &RgbaImage, opts: &TraceOptions) -> TraceResult {
     let (ow, oh) = img.dimensions();
     let requested = opts.preset.unwrap_or(Preset::Auto);
     if ow == 0 || oh == 0 {
-        return empty_result(ow, oh, if requested == Preset::Auto { Preset::Logo } else { requested }, &clock);
+        return empty_result(
+            ow,
+            oh,
+            if requested == Preset::Auto {
+                Preset::Logo
+            } else {
+                requested
+            },
+            &clock,
+        );
     }
 
     // 1. Size limit. `lim` = limited / original (<= 1).
     let max_dim = opts.max_dimension.filter(|&m| m > 0).unwrap_or(DEFAULT_MAX_DIMENSION);
     let base = limit_size(img, max_dim);
     if base.width() == 0 || base.height() == 0 {
-        return empty_result(ow, oh, if requested == Preset::Auto { Preset::Logo } else { requested }, &clock);
+        return empty_result(
+            ow,
+            oh,
+            if requested == Preset::Auto {
+                Preset::Logo
+            } else {
+                requested
+            },
+            &clock,
+        );
     }
     let lim = base.width().max(base.height()) as f64 / ow.max(oh) as f64;
 
@@ -200,7 +243,11 @@ pub fn trace(img: &RgbaImage, opts: &TraceOptions) -> TraceResult {
         }
         .max(1);
         let den = opts.denoise.unwrap_or(def.denoise).clamp(0.0, 1.0);
-        let small = if ps > 1 { downscale_nearest(&base, ps) } else { base.clone() };
+        let small = if ps > 1 {
+            downscale_nearest(&base, ps)
+        } else {
+            base.clone()
+        };
         let small = if den > 0.0 { denoise(&small, den) } else { small };
         (small, 1.0 / ps as f64)
     } else {
@@ -218,14 +265,23 @@ pub fn trace(img: &RgbaImage, opts: &TraceOptions) -> TraceResult {
         };
         let den = opts.denoise.unwrap_or(def.denoise).clamp(0.0, 1.0);
         let pre = if den > 0.0 { denoise(&base, den) } else { base.clone() };
-        let work = if up > 1 { upscale(&pre, up, curve_mode == CurveMode::Pixel) } else { pre };
+        let work = if up > 1 {
+            upscale(&pre, up, curve_mode == CurveMode::Pixel)
+        } else {
+            pre
+        };
         (work, up as f64)
     };
     // working coordinate / divisor = original coordinate.
     let divisor = factor * lim;
 
     // 4. Quantize.
-    let forced: Vec<[u8; 3]> = opts.palette.iter().flatten().filter_map(|s| parse_hex_color(s)).collect();
+    let forced: Vec<[u8; 3]> = opts
+        .palette
+        .iter()
+        .flatten()
+        .filter_map(|s| parse_hex_color(s))
+        .collect();
     let q = if !forced.is_empty() {
         quantize(&work, Some(forced.len() as u32), Some(&forced))
     } else {
@@ -270,21 +326,36 @@ pub fn trace(img: &RgbaImage, opts: &TraceOptions) -> TraceResult {
     let mut nodes = 0u32;
     for (i, r) in raw.into_iter().enumerate() {
         nodes = nodes.saturating_add(r.nodes);
-        let mut fill = palette.get(r.color_index as usize).cloned().unwrap_or_else(|| "#000000".to_string());
-        if want_gradients && gradients.len() < MAX_GRADIENTS && r.mask_area as f64 >= GRADIENT_MIN_FRACTION * work_area {
+        let mut fill = palette
+            .get(r.color_index as usize)
+            .cloned()
+            .unwrap_or_else(|| "#000000".to_string());
+        if want_gradients && gradients.len() < MAX_GRADIENTS && r.mask_area as f64 >= GRADIENT_MIN_FRACTION * work_area
+        {
             if let Some(g) = gradient_for(&base, &q, factor, lim, &r.bbox, r.color_index, gradients.len()) {
                 fill = format!("url(#{})", g.id);
                 gradients.push(g);
             }
         }
-        shapes.push(Shape { id: i as u32, fill, color_index: r.color_index as i32, d: r.d });
+        shapes.push(Shape {
+            id: i as u32,
+            fill,
+            color_index: r.color_index as i32,
+            d: r.d,
+        });
     }
     let background = detect_background(&q).map(|c| palette[c].clone());
     TraceResult {
         width: ow,
         height: oh,
         background,
-        stats: TraceStats { paths: shapes.len() as u32, nodes, colors: palette.len() as u32, ms: clock.ms(), preset },
+        stats: TraceStats {
+            paths: shapes.len() as u32,
+            nodes,
+            colors: palette.len() as u32,
+            ms: clock.ms(),
+            preset,
+        },
         palette,
         shapes,
         gradients,
@@ -293,7 +364,15 @@ pub fn trace(img: &RgbaImage, opts: &TraceOptions) -> TraceResult {
 
 /// Fits a gradient over the pixels of `color` inside `bbox` (working coords),
 /// evaluated on `base` (limited original-resolution image).
-fn gradient_for(base: &RgbaImage, q: &Quantized, factor: f64, lim: f64, bbox: &[u32; 4], color: u16, n: usize) -> Option<GradientDef> {
+fn gradient_for(
+    base: &RgbaImage,
+    q: &Quantized,
+    factor: f64,
+    lim: f64,
+    bbox: &[u32; 4],
+    color: u16,
+    n: usize,
+) -> Option<GradientDef> {
     let (bw, bh) = (base.width() as usize, base.height() as usize);
     let (qw, qh) = (q.width as usize, q.height as usize);
     let mut mask = vec![false; bw * bh];
@@ -323,6 +402,10 @@ fn gradient_for(base: &RgbaImage, q: &Quantized, factor: f64, lim: f64, bbox: &[
         y1: fit.y1 * k,
         x2: fit.x2 * k,
         y2: fit.y2 * k,
-        stops: fit.stops.iter().map(|&(offset, c)| GradientStop { offset, color: hex(c) }).collect(),
+        stops: fit
+            .stops
+            .iter()
+            .map(|&(offset, c)| GradientStop { offset, color: hex(c) })
+            .collect(),
     })
 }

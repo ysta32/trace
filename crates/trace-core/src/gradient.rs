@@ -3,7 +3,14 @@ use crate::quantize::{dist2, rgb_to_oklab};
 use image::RgbaImage;
 
 #[derive(Debug, Clone)]
-pub struct GradientFit { pub x1: f32, pub y1: f32, pub x2: f32, pub y2: f32, pub stops: Vec<(f32, [u8; 3])>, pub error: f32 }
+pub struct GradientFit {
+    pub x1: f32,
+    pub y1: f32,
+    pub x2: f32,
+    pub y2: f32,
+    pub stops: Vec<(f32, [u8; 3])>,
+    pub error: f32,
+}
 
 /// Minimum OKLab distance between gradient ends (12 dE*100).
 const MIN_RANGE: f32 = 0.12;
@@ -101,7 +108,11 @@ pub fn fit_linear_gradient(img: &RgbaImage, mask: &[bool]) -> Option<GradientFit
     let (mut ux, mut uy) = (theta.cos(), theta.sin());
     // Orient so that the direction follows increasing lightness (deterministic).
     let lum = |k: [f64; 3]| 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2];
-    let slope_l = lum([bx[0] * ux + by[0] * uy, bx[1] * ux + by[1] * uy, bx[2] * ux + by[2] * uy]);
+    let slope_l = lum([
+        bx[0] * ux + by[0] * uy,
+        bx[1] * ux + by[1] * uy,
+        bx[2] * ux + by[2] * uy,
+    ]);
     if slope_l < 0.0 {
         ux = -ux;
         uy = -uy;
@@ -121,7 +132,11 @@ pub fn fit_linear_gradient(img: &RgbaImage, mask: &[bool]) -> Option<GradientFit
         (Some(t2), Some(t3)) => {
             let mid_lin: Vec<f64> = (0..3).map(|k| 0.5 * (t3.0[0][k] + t3.0[2][k])).collect();
             let bend = (0..3).map(|k| (t3.0[1][k] - mid_lin[k]).abs()).fold(0.0, f64::max);
-            if bend > 4.0 && t3.1 < 0.8 * t2.1 { t3 } else { t2 }
+            if bend > 4.0 && t3.1 < 0.8 * t2.1 {
+                t3
+            } else {
+                t2
+            }
         }
         (Some(t2), None) => t2,
         _ => return None,
@@ -130,7 +145,13 @@ pub fn fit_linear_gradient(img: &RgbaImage, mask: &[bool]) -> Option<GradientFit
     if error >= MAX_REL_ERR * flat_rms {
         return None;
     }
-    let to_u8 = |c: [f64; 3]| [c[0].round().clamp(0.0, 255.0) as u8, c[1].round().clamp(0.0, 255.0) as u8, c[2].round().clamp(0.0, 255.0) as u8];
+    let to_u8 = |c: [f64; 3]| {
+        [
+            c[0].round().clamp(0.0, 255.0) as u8,
+            c[1].round().clamp(0.0, 255.0) as u8,
+            c[2].round().clamp(0.0, 255.0) as u8,
+        ]
+    };
     let cols: Vec<[u8; 3]> = stops.iter().map(|&c| to_u8(c)).collect();
     let labs: Vec<_> = cols.iter().map(|&c| rgb_to_oklab(c)).collect();
     let mut range = 0.0f32;
@@ -142,7 +163,11 @@ pub fn fit_linear_gradient(img: &RgbaImage, mask: &[bool]) -> Option<GradientFit
     if range < MIN_RANGE {
         return None;
     }
-    let offs: Vec<f32> = if cols.len() == 3 { vec![0.0, 0.5, 1.0] } else { vec![0.0, 1.0] };
+    let offs: Vec<f32> = if cols.len() == 3 {
+        vec![0.0, 0.5, 1.0]
+    } else {
+        vec![0.0, 1.0]
+    };
     Some(GradientFit {
         x1: (mx + tmin * ux) as f32,
         y1: (my + tmin * uy) as f32,

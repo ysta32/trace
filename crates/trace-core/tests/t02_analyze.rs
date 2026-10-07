@@ -10,7 +10,10 @@ fn render(w: u32, h: u32, f: impl Fn(f32, f32) -> [u8; 3]) -> RgbaImage {
         let mut acc = [0u32; 3];
         for sy in 0..SS {
             for sx in 0..SS {
-                let c = f((x as f32 + (sx as f32 + 0.5) / SS as f32) / w as f32, (y as f32 + (sy as f32 + 0.5) / SS as f32) / h as f32);
+                let c = f(
+                    (x as f32 + (sx as f32 + 0.5) / SS as f32) / w as f32,
+                    (y as f32 + (sy as f32 + 0.5) / SS as f32) / h as f32,
+                );
                 for k in 0..3 {
                     acc[k] += c[k] as u32;
                 }
@@ -94,7 +97,12 @@ fn photo_like_noise_and_gradient() {
     // Same smooth image without noise is detected as gradient content.
     let smooth = RgbaImage::from_fn(512, 384, |x, y| {
         let (u, v) = (x as f32 / 511.0, y as f32 / 383.0);
-        Rgba([(40.0 + 180.0 * u) as u8, (60.0 + 150.0 * v) as u8, (200.0 - 120.0 * u * v) as u8, 255])
+        Rgba([
+            (40.0 + 180.0 * u) as u8,
+            (60.0 + 150.0 * v) as u8,
+            (200.0 - 120.0 * u * v) as u8,
+            255,
+        ])
     });
     assert!(analyze(&smooth).has_gradients);
 }
@@ -151,7 +159,10 @@ fn preprocess_basics() {
     });
     let d = denoise(&noisy, 0.6);
     let var = |im: &RgbaImage| {
-        let vals: Vec<f64> = (4..60).flat_map(|y| (4..28).map(move |x| (x, y))).map(|(x, y)| im.get_pixel(x, y)[0] as f64).collect();
+        let vals: Vec<f64> = (4..60)
+            .flat_map(|y| (4..28).map(move |x| (x, y)))
+            .map(|(x, y)| im.get_pixel(x, y)[0] as f64)
+            .collect();
         let m = vals.iter().sum::<f64>() / vals.len() as f64;
         vals.iter().map(|v| (v - m).powi(2)).sum::<f64>() / vals.len() as f64
     };

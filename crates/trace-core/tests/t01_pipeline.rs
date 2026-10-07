@@ -7,12 +7,18 @@ fn red_circle(size: u32) -> RgbaImage {
     let r = size as f32 * 0.35;
     RgbaImage::from_fn(size, size, |x, y| {
         let (dx, dy) = (x as f32 + 0.5 - c, y as f32 + 0.5 - c);
-        if dx * dx + dy * dy <= r * r { Rgba([220, 20, 30, 255]) } else { Rgba([255, 255, 255, 255]) }
+        if dx * dx + dy * dy <= r * r {
+            Rgba([220, 20, 30, 255])
+        } else {
+            Rgba([255, 255, 255, 255])
+        }
     })
 }
 
 fn sprite_x8() -> RgbaImage {
-    const S: [&str; 8] = ["..####..", ".#oooo#.", "#o#oo#o#", "#oooooo#", "#o#oo#o#", "#oo##oo#", ".#oooo#.", "..####.."];
+    const S: [&str; 8] = [
+        "..####..", ".#oooo#.", "#o#oo#o#", "#oooooo#", "#o#oo#o#", "#oo##oo#", ".#oooo#.", "..####..",
+    ];
     RgbaImage::from_fn(64, 64, |x, y| match S[(y / 8) as usize].as_bytes()[(x / 8) as usize] {
         b'.' => Rgba([255, 255, 255, 255]),
         b'#' => Rgba([0, 0, 0, 255]),
@@ -23,7 +29,11 @@ fn sprite_x8() -> RgbaImage {
 #[test]
 fn logo_circle() {
     let img = red_circle(200);
-    let opts = TraceOptions { preset: Some(Preset::Logo), colors: Some(AutoOr::Value(2)), ..Default::default() };
+    let opts = TraceOptions {
+        preset: Some(Preset::Logo),
+        colors: Some(AutoOr::Value(2)),
+        ..Default::default()
+    };
     let r = trace(&img, &opts);
     assert_eq!((r.width, r.height), (200, 200));
     assert_eq!(r.palette.len(), 2);
@@ -31,7 +41,9 @@ fn logo_circle() {
     assert!(!r.shapes.is_empty() && r.shapes.len() <= 4, "{} shapes", r.shapes.len());
     assert!(r.shapes.iter().all(|s| !s.d.is_empty()));
     let bg = r.background.as_deref().expect("white border is background");
-    let near_white = (1..7).step_by(2).all(|i| u8::from_str_radix(&bg[i..i + 2], 16).unwrap() >= 235);
+    let near_white = (1..7)
+        .step_by(2)
+        .all(|i| u8::from_str_radix(&bg[i..i + 2], 16).unwrap() >= 235);
     assert!(near_white, "background {bg}");
     assert_eq!(r.stats.paths as usize, r.shapes.len());
     assert_eq!(r.stats.preset, Preset::Logo);
@@ -47,12 +59,19 @@ fn auto_preset_resolves() {
 
 #[test]
 fn pixelart_axis_aligned() {
-    let opts = TraceOptions { preset: Some(Preset::Pixelart), ..Default::default() };
+    let opts = TraceOptions {
+        preset: Some(Preset::Pixelart),
+        ..Default::default()
+    };
     let r = trace(&sprite_x8(), &opts);
     assert_eq!((r.width, r.height), (64, 64));
     assert!(r.shapes.len() >= 3);
     for s in &r.shapes {
-        assert!(s.d.chars().all(|c| "MmHhVvZ0123456789.- ".contains(c)), "non-axis path {}", s.d);
+        assert!(
+            s.d.chars().all(|c| "MmHhVvZ0123456789.- ".contains(c)),
+            "non-axis path {}",
+            s.d
+        );
     }
     // Stacked bottom layer spans the original 64x64 canvas.
     assert_eq!(r.shapes[0].d, "M0 0H64V64H0Z");
@@ -86,7 +105,11 @@ fn speckle_threshold_is_in_original_pixels_after_limit() {
     // exceeds a speckle of 10 (100 px^2 original) and must survive, even though
     // it is only ~6x6 working pixels.
     let img = RgbaImage::from_fn(2048, 2048, |x, y| {
-        if (1000..1012).contains(&x) && (1000..1012).contains(&y) { Rgba([0, 0, 0, 255]) } else { Rgba([255, 255, 255, 255]) }
+        if (1000..1012).contains(&x) && (1000..1012).contains(&y) {
+            Rgba([0, 0, 0, 255])
+        } else {
+            Rgba([255, 255, 255, 255])
+        }
     });
     let opts = TraceOptions {
         preset: Some(Preset::Logo),
@@ -98,5 +121,10 @@ fn speckle_threshold_is_in_original_pixels_after_limit() {
         ..Default::default()
     };
     let r = trace(&img, &opts);
-    assert_eq!(r.shapes.len(), 2, "dark square dropped as speckle: {:?}", r.shapes.iter().map(|s| &s.fill).collect::<Vec<_>>());
+    assert_eq!(
+        r.shapes.len(),
+        2,
+        "dark square dropped as speckle: {:?}",
+        r.shapes.iter().map(|s| &s.fill).collect::<Vec<_>>()
+    );
 }

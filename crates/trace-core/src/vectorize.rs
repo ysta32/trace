@@ -89,7 +89,14 @@ fn label_components(w: usize, h: usize, is_set: impl Fn(usize) -> bool) -> (Vec<
             continue;
         }
         let id = comps.len() as u32 + 1;
-        let mut c = Comp { x0: usize::MAX, y0: usize::MAX, x1: 0, y1: 0, area: 0, start: order.len() };
+        let mut c = Comp {
+            x0: usize::MAX,
+            y0: usize::MAX,
+            x1: 0,
+            y1: 0,
+            area: 0,
+            start: order.len(),
+        };
         labels[start] = id;
         stack.push(start);
         while let Some(i) = stack.pop() {
@@ -144,8 +151,19 @@ fn edge_start(x: i32, y: i32, side: usize) -> (i32, i32) {
 /// the min (y, x) vertex, closed (last == first). Outer contours run clockwise
 /// on screen, holes counter-clockwise, matching visioncortex's PathWalker.
 #[allow(clippy::too_many_arguments)]
-fn trace_contour(labels: &[u32], w: usize, h: usize, id: u32, visited: &mut [u8], px: i32, py: i32, side: usize) -> Vec<(i32, i32)> {
-    let fg = |x: i32, y: i32| x >= 0 && y >= 0 && (x as usize) < w && (y as usize) < h && labels[y as usize * w + x as usize] == id;
+fn trace_contour(
+    labels: &[u32],
+    w: usize,
+    h: usize,
+    id: u32,
+    visited: &mut [u8],
+    px: i32,
+    py: i32,
+    side: usize,
+) -> Vec<(i32, i32)> {
+    let fg = |x: i32, y: i32| {
+        x >= 0 && y >= 0 && (x as usize) < w && (y as usize) < h && labels[y as usize * w + x as usize] == id
+    };
     let (mut x, mut y, mut s) = (px, py, side);
     let mut verts: Vec<(i32, i32)> = Vec::new();
     let mut sides: Vec<u8> = Vec::new();
@@ -171,7 +189,10 @@ fn trace_contour(labels: &[u32], w: usize, h: usize, id: u32, visited: &mut [u8]
         }
     }
     let m = verts.len();
-    let mut corners: Vec<(i32, i32)> = (0..m).filter(|&i| sides[i] != sides[(i + m - 1) % m]).map(|i| verts[i]).collect();
+    let mut corners: Vec<(i32, i32)> = (0..m)
+        .filter(|&i| sides[i] != sides[(i + m - 1) % m])
+        .map(|i| verts[i])
+        .collect();
     if let Some(k) = (0..corners.len()).min_by_key(|&i| (corners[i].1, corners[i].0)) {
         corners.rotate_left(k);
     }
@@ -183,20 +204,34 @@ fn trace_contour(labels: &[u32], w: usize, h: usize, id: u32, visited: &mut [u8]
 
 /// Absolute shoelace area of a closed vertex list.
 fn polygon_area(pts: &[(i32, i32)]) -> u64 {
-    let s: i64 = pts.windows(2).map(|p| p[0].0 as i64 * p[1].1 as i64 - p[1].0 as i64 * p[0].1 as i64).sum();
+    let s: i64 = pts
+        .windows(2)
+        .map(|p| p[0].0 as i64 * p[1].1 as i64 - p[1].0 as i64 * p[0].1 as i64)
+        .sum();
     s.unsigned_abs() / 2
 }
 
 fn contour_to_subpath(pts: Vec<(i32, i32)>, outer: bool, off: (i32, i32), p: &VecParams) -> Option<Subpath> {
-    let path = PathI32 { path: pts.into_iter().map(|(x, y)| PointI32 { x: x + off.0, y: y + off.1 }).collect() };
+    let path = PathI32 {
+        path: pts
+            .into_iter()
+            .map(|(x, y)| PointI32 {
+                x: x + off.0,
+                y: y + off.1,
+            })
+            .collect(),
+    };
     if path.path.len() < 4 {
         return None;
     }
     match p.curve_mode {
-        CurveMode::Pixel => Some(Subpath::Polygon(path.path.iter().map(|q| (q.x as f64, q.y as f64)).collect())),
+        CurveMode::Pixel => Some(Subpath::Polygon(
+            path.path.iter().map(|q| (q.x as f64, q.y as f64)).collect(),
+        )),
         CurveMode::Polygon => {
             let simp = path.simplify(outer);
-            (simp.path.len() >= 3).then(|| Subpath::Polygon(simp.path.iter().map(|q| (q.x as f64, q.y as f64)).collect()))
+            (simp.path.len() >= 3)
+                .then(|| Subpath::Polygon(simp.path.iter().map(|q| (q.x as f64, q.y as f64)).collect()))
         }
         CurveMode::Spline => {
             // Same steps as visioncortex Spline::from_image, on our own contour.
@@ -232,7 +267,17 @@ fn contour_to_subpath(pts: Vec<(i32, i32)>, outer: bool, off: (i32, i32), p: &Ve
 /// Traces one component (outer contour + holes >= filter_speckle) into
 /// subpaths in working coordinates. Work is proportional to component area.
 #[allow(clippy::too_many_arguments)]
-fn trace_component(labels: &[u32], order: &[u32], lw: usize, lh: usize, id: u32, c: &Comp, origin: (usize, usize), visited: &mut [u8], p: &VecParams) -> Vec<Subpath> {
+fn trace_component(
+    labels: &[u32],
+    order: &[u32],
+    lw: usize,
+    lh: usize,
+    id: u32,
+    c: &Comp,
+    origin: (usize, usize),
+    visited: &mut [u8],
+    p: &VecParams,
+) -> Vec<Subpath> {
     let pixels = &order[c.start..c.start + c.area as usize];
     let off = (origin.0 as i32, origin.1 as i32);
     let first = pixels[0] as usize;
@@ -252,7 +297,11 @@ fn trace_component(labels: &[u32], order: &[u32], lw: usize, lh: usize, id: u32,
             }
             let o = DIRS[(side + 1) % 4];
             let (nx, ny) = (x - o.0, y - o.1);
-            let neighbour_in = nx >= 0 && ny >= 0 && (nx as usize) < lw && (ny as usize) < lh && labels[ny as usize * lw + nx as usize] == id;
+            let neighbour_in = nx >= 0
+                && ny >= 0
+                && (nx as usize) < lw
+                && (ny as usize) < lh
+                && labels[ny as usize * lw + nx as usize] == id;
             if neighbour_in {
                 continue;
             }
@@ -307,7 +356,11 @@ pub fn vectorize(q: &Quantized, params: &VecParams) -> Vec<RawShape> {
             *b = [b[0].min(n[0]), b[1].min(n[1]), b[2].max(n[2]), b[3].max(n[3])];
         }
     }
-    let mul = if params.scale.is_finite() && params.scale > 0.0 { 1.0 / params.scale as f64 } else { 1.0 };
+    let mul = if params.scale.is_finite() && params.scale > 0.0 {
+        1.0 / params.scale as f64
+    } else {
+        1.0
+    };
     let mut shapes = Vec::new();
     for (r, &color) in order.iter().enumerate() {
         let [bx0, by0, bx1, by1] = layer_bb[r];
@@ -315,7 +368,11 @@ pub fn vectorize(q: &Quantized, params: &VecParams) -> Vec<RawShape> {
         let stacked = params.mode == Mode::Stacked;
         let in_layer = |i: usize| {
             let l = q.labels[(by0 + i / bw) * w + bx0 + i % bw];
-            if stacked { valid(l) && rank[l as usize] >= r } else { l as usize == color && valid(l) }
+            if stacked {
+                valid(l) && rank[l as usize] >= r
+            } else {
+                l as usize == color && valid(l)
+            }
         };
         let (labels, comps, order_px) = label_components(bw, bh, in_layer);
         let mut visited = vec![0u8; bw * bh];
@@ -323,7 +380,17 @@ pub fn vectorize(q: &Quantized, params: &VecParams) -> Vec<RawShape> {
             if c.area < params.filter_speckle {
                 continue;
             }
-            let subs = trace_component(&labels, &order_px, bw, bh, ci as u32 + 1, c, (bx0, by0), &mut visited, params);
+            let subs = trace_component(
+                &labels,
+                &order_px,
+                bw,
+                bh,
+                ci as u32 + 1,
+                c,
+                (bx0, by0),
+                &mut visited,
+                params,
+            );
             if subs.is_empty() {
                 continue;
             }
@@ -336,7 +403,12 @@ pub fn vectorize(q: &Quantized, params: &VecParams) -> Vec<RawShape> {
                 d,
                 nodes,
                 mask_area: c.area,
-                bbox: [(bx0 + c.x0) as u32, (by0 + c.y0) as u32, (bx0 + c.x1) as u32, (by0 + c.y1) as u32],
+                bbox: [
+                    (bx0 + c.x0) as u32,
+                    (by0 + c.y0) as u32,
+                    (bx0 + c.x1) as u32,
+                    (by0 + c.y1) as u32,
+                ],
             });
         }
     }
@@ -385,8 +457,21 @@ mod tests {
                 }
                 let first = order[c.start] as usize;
                 let mut visited = vec![0u8; w * h];
-                let ours = trace_contour(&labels, w, h, id, &mut visited, (first % w) as i32, (first / w) as i32, 0);
-                let theirs: Vec<(i32, i32)> = PathI32::image_to_path(&img, true, PathSimplifyMode::None).path.iter().map(|p| (p.x, p.y)).collect();
+                let ours = trace_contour(
+                    &labels,
+                    w,
+                    h,
+                    id,
+                    &mut visited,
+                    (first % w) as i32,
+                    (first / w) as i32,
+                    0,
+                );
+                let theirs: Vec<(i32, i32)> = PathI32::image_to_path(&img, true, PathSimplifyMode::None)
+                    .path
+                    .iter()
+                    .map(|p| (p.x, p.y))
+                    .collect();
                 assert_eq!(ours, theirs, "{w}x{h} comp {id}");
                 checked += 1;
             }
@@ -408,7 +493,11 @@ mod tests {
         let (labels, comps, order) = label_components(w, h, |i| bits[i]);
         assert_eq!(comps.len(), 2);
         let mut visited = vec![0u8; w * h];
-        let p = VecParams { curve_mode: CurveMode::Pixel, filter_speckle: 0, ..VecParams::default() };
+        let p = VecParams {
+            curve_mode: CurveMode::Pixel,
+            filter_speckle: 0,
+            ..VecParams::default()
+        };
         let subs = trace_component(&labels, &order, w, h, 1, &comps[0], (0, 0), &mut visited, &p);
         assert_eq!(
             subs,

@@ -13,16 +13,30 @@ fn rings(n: u32) -> Quantized {
             labels.push(((x - c).abs().max((y - c).abs()) % 2) as u16);
         }
     }
-    Quantized { width: n, height: n, palette: vec![[0, 0, 0], [255, 255, 255]], labels }
+    Quantized {
+        width: n,
+        height: n,
+        palette: vec![[0, 0, 0], [255, 255, 255]],
+        labels,
+    }
 }
 
 #[test]
 fn concentric_rings_cutout_is_linear() {
     // Release: 2048^2 (old bbox-rescan cost ~1.4e9 visits). Debug builds use 1024^2.
-    let (n, bound) = if cfg!(debug_assertions) { (1024, Duration::from_secs(30)) } else { (2048, Duration::from_secs(5)) };
+    let (n, bound) = if cfg!(debug_assertions) {
+        (1024, Duration::from_secs(30))
+    } else {
+        (2048, Duration::from_secs(5))
+    };
     let q = rings(n);
     for curve in [CurveMode::Pixel, CurveMode::Polygon] {
-        let p = VecParams { mode: Mode::Cutout, curve_mode: curve, filter_speckle: 0, ..VecParams::default() };
+        let p = VecParams {
+            mode: Mode::Cutout,
+            curve_mode: curve,
+            filter_speckle: 0,
+            ..VecParams::default()
+        };
         let t = Instant::now();
         let shapes = vectorize(&q, &p);
         let el = t.elapsed();

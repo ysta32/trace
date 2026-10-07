@@ -10,7 +10,12 @@ use std::sync::OnceLock;
 
 pub const TRANSPARENT: u16 = u16::MAX;
 #[derive(Debug, Clone)]
-pub struct Quantized { pub width: u32, pub height: u32, pub palette: Vec<[u8; 3]>, pub labels: Vec<u16> }
+pub struct Quantized {
+    pub width: u32,
+    pub height: u32,
+    pub palette: Vec<[u8; 3]>,
+    pub labels: Vec<u16>,
+}
 
 /// k=None => auto color count. `forced` overrides palette (labels = nearest). Pixels with alpha<128 => TRANSPARENT.
 pub fn quantize(img: &RgbaImage, k: Option<u32>, forced: Option<&[[u8; 3]]>) -> Quantized {
@@ -22,7 +27,12 @@ pub fn quantize(img: &RgbaImage, k: Option<u32>, forced: Option<&[[u8; 3]]>) -> 
     let prep = prepare(img);
     let (pts, wts) = histogram(img, &prep);
     if pts.is_empty() {
-        return Quantized { width: w, height: h, palette: Vec::new(), labels: vec![TRANSPARENT; prep.len()] };
+        return Quantized {
+            width: w,
+            height: h,
+            palette: Vec::new(),
+            labels: vec![TRANSPARENT; prep.len()],
+        };
     }
     let centers = match k {
         Some(k) if k > 0 => {
@@ -59,7 +69,11 @@ fn srgb_lut() -> &'static [f64; 256] {
         let mut t = [0.0f64; 256];
         for (i, v) in t.iter_mut().enumerate() {
             let c = i as f64 / 255.0;
-            *v = if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) };
+            *v = if c <= 0.04045 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            };
         }
         t
     })
@@ -91,7 +105,11 @@ pub(crate) fn oklab_to_rgb(c: Lab) -> [u8; 3] {
     let b = -0.004_196_086_3 * l - 0.703_418_614_7 * m + 1.707_614_701 * s;
     let enc = |v: f64| -> u8 {
         let v = v.clamp(0.0, 1.0);
-        let e = if v <= 0.003_130_8 { 12.92 * v } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 };
+        let e = if v <= 0.003_130_8 {
+            12.92 * v
+        } else {
+            1.055 * v.powf(1.0 / 2.4) - 0.055
+        };
         (e * 255.0 + 0.5).clamp(0.0, 255.0) as u8
     };
     [enc(r), enc(g), enc(b)]
@@ -174,7 +192,13 @@ pub(crate) fn prepare(img: &RgbaImage) -> Prep {
         opaque.push(p[3] >= 128);
     }
     let blend = detect_blends(w, h, &lab, &opaque);
-    Prep { w, h, lab, opaque, blend }
+    Prep {
+        w,
+        h,
+        lab,
+        opaque,
+        blend,
+    }
 }
 
 /// A pixel is an antialias blend if along some axis/diagonal its colour lies
@@ -247,7 +271,9 @@ fn histogram(img: &RgbaImage, prep: &Prep) -> (Vec<Lab>, Vec<f32>) {
             if !prep.opaque[i] || (!use_all && prep.blend[i]) {
                 continue;
             }
-            let key = (((p[0] >> shift) as usize) << (2 * bits)) | (((p[1] >> shift) as usize) << bits) | (p[2] >> shift) as usize;
+            let key = (((p[0] >> shift) as usize) << (2 * bits))
+                | (((p[1] >> shift) as usize) << bits)
+                | (p[2] >> shift) as usize;
             let l = prep.lab[i];
             let b = &mut bins[key];
             b[0] += 1.0;
@@ -334,7 +360,12 @@ fn add_center(pts: &[Lab], wts: &[f32], centers: &mut Vec<Lab>, rng: &mut XorShi
             r -= v;
         }
         let c = pts[cand];
-        let new_pot: f64 = pts.iter().zip(wts).zip(&d2).map(|((p, &w), &d)| w as f64 * d.min(dist2(*p, c)) as f64).sum();
+        let new_pot: f64 = pts
+            .iter()
+            .zip(wts)
+            .zip(&d2)
+            .map(|((p, &w), &d)| w as f64 * d.min(dist2(*p, c)) as f64)
+            .sum();
         if best.is_none_or(|(_, bp)| new_pot < bp) {
             best = Some((cand, new_pot));
         }
@@ -395,7 +426,12 @@ fn merge_close(mut centers: Vec<Lab>, mut sizes: Vec<f32>, thr: f32) -> Vec<Lab>
         centers.swap_remove(j);
         sizes.swap_remove(j);
     }
-    centers.into_iter().zip(sizes).filter(|(_, s)| *s > 0.0).map(|(c, _)| c).collect()
+    centers
+        .into_iter()
+        .zip(sizes)
+        .filter(|(_, s)| *s > 0.0)
+        .map(|(c, _)| c)
+        .collect()
 }
 
 /// Incremental k-means: grow k until the marginal error reduction is small,
@@ -577,7 +613,11 @@ fn compact(img: &RgbaImage, prep: &Prep, centers: &[Lab], mut labels: Vec<u16>) 
         let s = sum[old];
         palette.push(match s[3] {
             0 => oklab_to_rgb(centers[old]),
-            n => [((s[0] + n / 2) / n) as u8, ((s[1] + n / 2) / n) as u8, ((s[2] + n / 2) / n) as u8],
+            n => [
+                ((s[0] + n / 2) / n) as u8,
+                ((s[1] + n / 2) / n) as u8,
+                ((s[2] + n / 2) / n) as u8,
+            ],
         });
     }
     for l in labels.iter_mut() {
@@ -585,7 +625,12 @@ fn compact(img: &RgbaImage, prep: &Prep, centers: &[Lab], mut labels: Vec<u16>) 
             *l = remap[*l as usize];
         }
     }
-    Quantized { width: img.width(), height: img.height(), palette, labels }
+    Quantized {
+        width: img.width(),
+        height: img.height(),
+        palette,
+        labels,
+    }
 }
 
 fn quantize_forced(img: &RgbaImage, pal: &[[u8; 3]]) -> Quantized {
@@ -608,5 +653,10 @@ fn quantize_forced(img: &RgbaImage, pal: &[[u8; 3]]) -> Quantized {
             }
         })
         .collect();
-    Quantized { width: img.width(), height: img.height(), palette: pal.to_vec(), labels }
+    Quantized {
+        width: img.width(),
+        height: img.height(),
+        palette: pal.to_vec(),
+        labels,
+    }
 }

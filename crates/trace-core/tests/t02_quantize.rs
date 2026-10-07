@@ -10,14 +10,22 @@ fn render(w: u32, h: u32, f: impl Fn(f32, f32) -> [u8; 3]) -> RgbaImage {
         let mut acc = [0u32; 3];
         for sy in 0..SS {
             for sx in 0..SS {
-                let c = f((x as f32 + (sx as f32 + 0.5) / SS as f32) / w as f32, (y as f32 + (sy as f32 + 0.5) / SS as f32) / h as f32);
+                let c = f(
+                    (x as f32 + (sx as f32 + 0.5) / SS as f32) / w as f32,
+                    (y as f32 + (sy as f32 + 0.5) / SS as f32) / h as f32,
+                );
                 for k in 0..3 {
                     acc[k] += c[k] as u32;
                 }
             }
         }
         let n = SS * SS;
-        Rgba([((acc[0] + n / 2) / n) as u8, ((acc[1] + n / 2) / n) as u8, ((acc[2] + n / 2) / n) as u8, 255])
+        Rgba([
+            ((acc[0] + n / 2) / n) as u8,
+            ((acc[1] + n / 2) / n) as u8,
+            ((acc[2] + n / 2) / n) as u8,
+            255,
+        ])
     })
 }
 
@@ -74,7 +82,9 @@ fn logo_three_colors_no_blend_labels() {
     // Palette colours are the true flat colours.
     for want in [[250u8, 250, 250], [220, 30, 40], [20, 40, 120]] {
         assert!(
-            q.palette.iter().any(|p| (0..3).all(|c| (p[c] as i32 - want[c] as i32).abs() <= 4)),
+            q.palette
+                .iter()
+                .any(|p| (0..3).all(|c| (p[c] as i32 - want[c] as i32).abs() <= 4)),
             "missing {want:?} in {:?}",
             q.palette
         );

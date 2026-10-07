@@ -40,7 +40,9 @@ fn vertical_and_diagonal_direction() {
     assert!((g.y2 - g.y1).abs() > 50.0 && (g.x2 - g.x1).abs() < 1.0, "{g:?}");
     assert!(g.y2 > g.y1, "dark->light orientation {g:?}");
 
-    let img = RgbaImage::from_fn(64, 64, |x, y| lerp([200, 30, 30], [30, 30, 200], (x + y) as f32 / 126.0));
+    let img = RgbaImage::from_fn(64, 64, |x, y| {
+        lerp([200, 30, 30], [30, 30, 200], (x + y) as f32 / 126.0)
+    });
     let g = fit_linear_gradient(&img, &[true; 64 * 64]).expect("diagonal");
     let (dx, dy) = (g.x2 - g.x1, g.y2 - g.y1);
     assert!((dx.abs() - dy.abs()).abs() < 0.1 * dx.abs().max(dy.abs()), "{g:?}");
@@ -68,7 +70,11 @@ fn flat_square_and_noise_rejected() {
 fn bent_gradient_gets_three_stops() {
     let img = RgbaImage::from_fn(90, 20, |x, _| {
         let t = x as f32 / 89.0;
-        if t < 0.5 { lerp([255, 0, 0], [255, 255, 0], t * 2.0) } else { lerp([255, 255, 0], [0, 0, 255], t * 2.0 - 1.0) }
+        if t < 0.5 {
+            lerp([255, 0, 0], [255, 255, 0], t * 2.0)
+        } else {
+            lerp([255, 255, 0], [0, 0, 255], t * 2.0 - 1.0)
+        }
     });
     let g = fit_linear_gradient(&img, &[true; 90 * 20]).expect("gradient");
     assert_eq!(g.stops.len(), 3, "{g:?}");

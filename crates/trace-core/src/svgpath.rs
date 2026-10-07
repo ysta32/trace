@@ -10,7 +10,10 @@ pub enum Subpath {
     /// Closed polygon; the closing edge back to the first vertex is implicit.
     Polygon(Vec<(f64, f64)>),
     /// Closed cubic spline: start point followed by (c1, c2, end) segments.
-    Cubic { start: (f64, f64), segs: Vec<[(f64, f64); 3]> },
+    Cubic {
+        start: (f64, f64),
+        segs: Vec<[(f64, f64); 3]>,
+    },
 }
 
 /// Formats `v` (in hundredths) as a compact decimal: no trailing zeros, no leading `0.`.
@@ -52,7 +55,14 @@ struct Writer {
 
 impl Writer {
     fn new() -> Self {
-        Writer { out: String::new(), cur: (0, 0), start: (0, 0), last_cmd: None, last_num_dot: None, nodes: 0 }
+        Writer {
+            out: String::new(),
+            cur: (0, 0),
+            start: (0, 0),
+            last_cmd: None,
+            last_num_dot: None,
+            nodes: 0,
+        }
     }
 
     /// Renders a command (letter possibly omitted) without committing it.
@@ -129,7 +139,10 @@ impl Writer {
         let o = self.cur;
         self.emit_best(
             ('C', vec![c1.0, c1.1, c2.0, c2.1, p.0, p.1]),
-            ('c', vec![c1.0 - o.0, c1.1 - o.1, c2.0 - o.0, c2.1 - o.1, p.0 - o.0, p.1 - o.1]),
+            (
+                'c',
+                vec![c1.0 - o.0, c1.1 - o.1, c2.0 - o.0, c2.1 - o.1, p.0 - o.0, p.1 - o.1],
+            ),
         );
         self.cur = p;
         self.nodes += 1;

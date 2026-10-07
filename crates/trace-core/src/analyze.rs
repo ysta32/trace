@@ -8,7 +8,16 @@ pub fn analyze(img: &RgbaImage) -> Analysis {
     let (width, height) = img.dimensions();
     let has_alpha = img.pixels().any(|p| p[3] < 255);
     if width == 0 || height == 0 {
-        return Analysis { width, height, preset: Preset::Logo, colors: 2, is_pixel_art: false, pixel_scale: 1, has_gradients: false, has_alpha };
+        return Analysis {
+            width,
+            height,
+            preset: Preset::Logo,
+            colors: 2,
+            is_pixel_art: false,
+            pixel_scale: 1,
+            has_gradients: false,
+            has_alpha,
+        };
     }
     let prep = prepare(img);
     let colors = auto_k_prepared(img, &prep);
@@ -34,7 +43,16 @@ pub fn analyze(img: &RgbaImage) -> Analysis {
     } else {
         Preset::Logo
     };
-    Analysis { width, height, preset, colors, is_pixel_art, pixel_scale, has_gradients, has_alpha }
+    Analysis {
+        width,
+        height,
+        preset,
+        colors,
+        is_pixel_art,
+        pixel_scale,
+        has_gradients,
+        has_alpha,
+    }
 }
 
 /// Nearest-neighbour block size of upscaled pixel art (1 if not pixel art).
@@ -154,7 +172,17 @@ fn gradient_fraction(prep: &Prep) -> f64 {
                 let p = prep.lab[i];
                 let (l, r, u, d) = (prep.lab[i - 1], prep.lab[i + 1], prep.lab[i - w], prep.lab[i + w]);
                 let g = (0.25 * (dist2(l, r) + dist2(u, d))).sqrt();
-                let sec = |a: [f32; 3], b: [f32; 3]| dist2([a[0] + b[0] - 2.0 * p[0], a[1] + b[1] - 2.0 * p[1], a[2] + b[2] - 2.0 * p[2]], [0.0; 3]).sqrt();
+                let sec = |a: [f32; 3], b: [f32; 3]| {
+                    dist2(
+                        [
+                            a[0] + b[0] - 2.0 * p[0],
+                            a[1] + b[1] - 2.0 * p[1],
+                            a[2] + b[2] - 2.0 * p[2],
+                        ],
+                        [0.0; 3],
+                    )
+                    .sqrt()
+                };
                 let curv = sec(l, r).max(sec(u, d));
                 if g > 0.0015 && g < 0.04 && curv < 0.5 * g + 0.002 {
                     smooth += 1;
@@ -176,7 +204,9 @@ fn is_line_art(prep: &Prep) -> bool {
     let (w, h) = (prep.w, prep.h);
     let n = w * h;
     let dark: Vec<bool> = (0..n).map(|i| prep.opaque[i] && prep.lab[i][0] < 0.45).collect();
-    let light = (0..n).filter(|&i| !prep.opaque[i] || (prep.lab[i][0] > 0.8 && chroma(prep.lab[i]) < 0.08)).count();
+    let light = (0..n)
+        .filter(|&i| !prep.opaque[i] || (prep.lab[i][0] > 0.8 && chroma(prep.lab[i]) < 0.08))
+        .count();
     let n_dark = dark.iter().filter(|&&d| d).count();
     if n_dark == 0 || light * 2 < n || n_dark * 10 > n * 3 {
         return false;

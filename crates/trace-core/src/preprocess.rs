@@ -9,7 +9,11 @@ use image::{Rgba, RgbaImage};
 /// edges between distinct colours are preserved. Alpha is kept unchanged and
 /// transparent neighbours (alpha<128) do not contribute to opaque pixels.
 pub fn denoise(img: &RgbaImage, strength: f32) -> RgbaImage {
-    let s = if strength.is_finite() { strength.clamp(0.0, 1.0) } else { 0.0 };
+    let s = if strength.is_finite() {
+        strength.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
     let (w, h) = (img.width() as usize, img.height() as usize);
     if s <= 0.0 || w == 0 || h == 0 {
         return img.clone();
@@ -22,7 +26,8 @@ pub fn denoise(img: &RgbaImage, strength: f32) -> RgbaImage {
     let mut spatial = vec![0.0f32; side * side];
     for dy in -r..=r {
         for dx in -r..=r {
-            spatial[((dy + r) as usize) * side + (dx + r) as usize] = (-((dx * dx + dy * dy) as f32) / (2.0 * sigma_s * sigma_s)).exp();
+            spatial[((dy + r) as usize) * side + (dx + r) as usize] =
+                (-((dx * dx + dy * dy) as f32) / (2.0 * sigma_s * sigma_s)).exp();
         }
     }
     let src = img.as_raw();
@@ -48,7 +53,9 @@ pub fn denoise(img: &RgbaImage, strength: f32) -> RgbaImage {
                     if opaque && src[j + 3] < 128 {
                         continue;
                     }
-                    let d = (src[j] as i32 - c[0]).abs() + (src[j + 1] as i32 - c[1]).abs() + (src[j + 2] as i32 - c[2]).abs();
+                    let d = (src[j] as i32 - c[0]).abs()
+                        + (src[j + 1] as i32 - c[1]).abs()
+                        + (src[j + 2] as i32 - c[2]).abs();
                     let wt = spatial[((dy + r) as usize) * side + (dx + r) as usize] * range_lut[d as usize];
                     acc[0] += wt * src[j] as f32;
                     acc[1] += wt * src[j + 1] as f32;

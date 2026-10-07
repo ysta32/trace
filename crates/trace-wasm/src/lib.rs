@@ -18,8 +18,7 @@ fn parse_opts(opts: JsValue) -> Result<TraceOptions, JsValue> {
     if opts.is_undefined() || opts.is_null() {
         return Ok(TraceOptions::default());
     }
-    serde_wasm_bindgen::from_value(opts)
-        .map_err(|e| JsValue::from_str(&format!("invalid options: {e}")))
+    serde_wasm_bindgen::from_value(opts).map_err(|e| JsValue::from_str(&format!("invalid options: {e}")))
 }
 
 #[wasm_bindgen]
