@@ -1,0 +1,9 @@
+[package]
+name = "trace-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+[lib]
+crate-type = ["cdylib", "rlib"]
+[dependencies]
+trace-core = { path = "../trace-core" }

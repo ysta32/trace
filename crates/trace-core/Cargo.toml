@@ -6,3 +6,5 @@ license = "MIT"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+visioncortex = "0.8"
