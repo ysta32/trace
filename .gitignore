@@ -8,3 +8,4 @@ pkg/
 bench/out/
 *.log
 .DS_Store
+packages/trace-vectorizer/wasm/
