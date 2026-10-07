@@ -114,6 +114,14 @@ fn downscale_nearest(img: &RgbaImage, s: u32) -> RgbaImage {
     })
 }
 
+/// Speckle side length in original pixels -> minimum cluster area in working
+/// pixels. `divisor` = working / original linear scale (upscale or pixel-art
+/// downscale, times the limit_size factor).
+pub fn speckle_area_working(side_original: f64, divisor: f64) -> u32 {
+    let a = (side_original.max(0.0) * divisor).powi(2).round();
+    if a.is_finite() { a.min(u32::MAX as f64) as u32 } else { 0 }
+}
+
 /// Palette index covering >60% of the border, if any.
 pub fn detect_background(q: &Quantized) -> Option<usize> {
     let (w, h) = (q.width as usize, q.height as usize);
@@ -240,7 +248,7 @@ pub fn trace(img: &RgbaImage, opts: &TraceOptions) -> TraceResult {
         Some(s) => s as f64,
         None => def.filter_speckle as f64 * speckle_factor_for_simplify(simplify) as f64,
     };
-    let speckle_area = (speckle_side * factor).powi(2).round().min(u32::MAX as f64) as u32;
+    let speckle_area = speckle_area_working(speckle_side, divisor);
     let params = VecParams {
         mode: opts.mode.unwrap_or(Mode::Stacked),
         curve_mode,

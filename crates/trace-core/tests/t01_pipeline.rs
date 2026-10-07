@@ -79,3 +79,24 @@ fn cutout_forced_palette_and_gradients_flag() {
         }
     }
 }
+
+#[test]
+fn speckle_threshold_is_in_original_pixels_after_limit() {
+    // 2048^2 limited to 1024 (lim .5): a 12x12 dark square (144 px^2 original)
+    // exceeds a speckle of 10 (100 px^2 original) and must survive, even though
+    // it is only ~6x6 working pixels.
+    let img = RgbaImage::from_fn(2048, 2048, |x, y| {
+        if (1000..1012).contains(&x) && (1000..1012).contains(&y) { Rgba([0, 0, 0, 255]) } else { Rgba([255, 255, 255, 255]) }
+    });
+    let opts = TraceOptions {
+        preset: Some(Preset::Logo),
+        colors: Some(AutoOr::Value(2)),
+        denoise: Some(0.0),
+        filter_speckle: Some(10),
+        max_dimension: Some(1024),
+        mode: Some(Mode::Cutout),
+        ..Default::default()
+    };
+    let r = trace(&img, &opts);
+    assert_eq!(r.shapes.len(), 2, "dark square dropped as speckle: {:?}", r.shapes.iter().map(|s| &s.fill).collect::<Vec<_>>());
+}

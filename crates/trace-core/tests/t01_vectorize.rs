@@ -329,3 +329,15 @@ fn svgpath_compact_relative_and_rounding() {
     assert!(d.ends_with('Z'));
     assert_eq!(merge_collinear(vec![(0, 0), (1, 0), (2, 0), (2, 2), (0, 2), (0, 1)]), vec![(0, 0), (2, 0), (2, 2), (0, 2)]);
 }
+
+#[test]
+fn speckle_area_includes_limit_factor() {
+    use trace_core::pipeline::speckle_area_working;
+    // limit_size halved the image (lim .5), no upscale: side 10 -> 5px -> 25 px^2.
+    assert_eq!(speckle_area_working(10.0, 1.0 * 0.5), 25);
+    // 2x upscale after a .5 limit cancels out.
+    assert_eq!(speckle_area_working(8.0, 2.0 * 0.5), 64);
+    // Pixel art downscaled by 8: a side-8 speckle is one working pixel.
+    assert_eq!(speckle_area_working(8.0, 1.0 / 8.0), 1);
+    assert_eq!(speckle_area_working(0.0, 4.0), 0);
+}

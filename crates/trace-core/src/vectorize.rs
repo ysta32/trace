@@ -1,11 +1,14 @@
 //! T01. Label map -> shapes (connected components + visioncortex path fitting).
 //!
 //! Connected components are labelled here (u32 ids) rather than with
-//! `BinaryImage::to_clusters`, whose u16 cluster ids panic past 65535 clusters.
+//! `BinaryImage::to_clusters`, whose u16 cluster ids panic past 65535 clusters,
+//! and contours are followed directly on the label map (visioncortex's
+//! image-based walkers rescan each component's whole bounding box). The
+//! contours then go through visioncortex simplification/smoothing/spline fitting.
 use crate::quantize::{Quantized, TRANSPARENT};
 use crate::svgpath::{format_path, Subpath};
 use crate::types::{CurveMode, Mode};
-use visioncortex::{BinaryImage, PathI32, PathSimplifyMode, Spline};
+use visioncortex::{PathI32, PointI32, Spline};
 
 /// Outset ratio used by visioncortex/vtracer spline smoothing.
 const OUTSET_RATIO: f64 = 8.0;
@@ -68,23 +71,29 @@ struct Comp {
     x1: usize,
     y1: usize,
     area: u32,
+    /// This component's pixels are `order[start..start + area]`; the first is
+    /// its topmost-leftmost pixel.
+    start: usize,
 }
 
-/// 4-connected component labelling. Returns (labels, comps) where labels are
-/// 1-based component ids (0 = unset) and comps[id - 1] describes component id.
-fn label_components(w: usize, h: usize, is_set: impl Fn(usize) -> bool) -> (Vec<u32>, Vec<Comp>) {
+/// 4-connected component labelling. Returns (labels, comps, order): labels are
+/// 1-based component ids (0 = unset), comps[id - 1] describes component id and
+/// `order` lists pixel indices grouped by component.
+fn label_components(w: usize, h: usize, is_set: impl Fn(usize) -> bool) -> (Vec<u32>, Vec<Comp>, Vec<u32>) {
     let mut labels = vec![0u32; w * h];
     let mut comps = Vec::new();
+    let mut order: Vec<u32> = Vec::new();
     let mut stack: Vec<usize> = Vec::new();
     for start in 0..w * h {
         if labels[start] != 0 || !is_set(start) {
             continue;
         }
         let id = comps.len() as u32 + 1;
-        let mut c = Comp { x0: usize::MAX, y0: usize::MAX, x1: 0, y1: 0, area: 0 };
+        let mut c = Comp { x0: usize::MAX, y0: usize::MAX, x1: 0, y1: 0, area: 0, start: order.len() };
         labels[start] = id;
         stack.push(start);
         while let Some(i) = stack.pop() {
+            order.push(i as u32);
             let (x, y) = (i % w, i / w);
             c.x0 = c.x0.min(x);
             c.y0 = c.y0.min(y);
@@ -112,87 +121,148 @@ fn label_components(w: usize, h: usize, is_set: impl Fn(usize) -> bool) -> (Vec<
         }
         comps.push(c);
     }
-    (labels, comps)
+    (labels, comps, order)
 }
 
-fn boundary_to_subpath(img: &BinaryImage, outer: bool, off: (i32, i32), p: &VecParams) -> Option<Subpath> {
-    let (ox, oy) = (off.0 as f64, off.1 as f64);
+/// Edge directions indexed by pixel side: 0 top (east), 1 right (south),
+/// 2 bottom (west), 3 left (north), in y-down coordinates. The component's
+/// interior is always on the right of travel.
+const DIRS: [(i32, i32); 4] = [(1, 0), (0, 1), (-1, 0), (0, -1)];
+
+fn edge_start(x: i32, y: i32, side: usize) -> (i32, i32) {
+    match side {
+        0 => (x, y),
+        1 => (x + 1, y),
+        2 => (x + 1, y + 1),
+        _ => (x, y + 1),
+    }
+}
+
+/// Follows the closed contour of component `id` through boundary edge
+/// (`px`,`py`,`side`), marking visited edges. Pixels are 4-connected (contours
+/// turn right at diagonal pinches). Returns corner vertices rotated to start at
+/// the min (y, x) vertex, closed (last == first). Outer contours run clockwise
+/// on screen, holes counter-clockwise, matching visioncortex's PathWalker.
+#[allow(clippy::too_many_arguments)]
+fn trace_contour(labels: &[u32], w: usize, h: usize, id: u32, visited: &mut [u8], px: i32, py: i32, side: usize) -> Vec<(i32, i32)> {
+    let fg = |x: i32, y: i32| x >= 0 && y >= 0 && (x as usize) < w && (y as usize) < h && labels[y as usize * w + x as usize] == id;
+    let (mut x, mut y, mut s) = (px, py, side);
+    let mut verts: Vec<(i32, i32)> = Vec::new();
+    let mut sides: Vec<u8> = Vec::new();
+    loop {
+        visited[y as usize * w + x as usize] |= 1 << s;
+        verts.push(edge_start(x, y, s));
+        sides.push(s as u8);
+        let d = DIRS[s];
+        let n = DIRS[(s + 1) % 4];
+        let (ax, ay) = (x + d.0, y + d.1);
+        if !fg(ax, ay) {
+            s = (s + 1) % 4;
+        } else if fg(ax - n.0, ay - n.1) {
+            x = ax - n.0;
+            y = ay - n.1;
+            s = (s + 3) % 4;
+        } else {
+            x = ax;
+            y = ay;
+        }
+        if x == px && y == py && s == side {
+            break;
+        }
+    }
+    let m = verts.len();
+    let mut corners: Vec<(i32, i32)> = (0..m).filter(|&i| sides[i] != sides[(i + m - 1) % m]).map(|i| verts[i]).collect();
+    if let Some(k) = (0..corners.len()).min_by_key(|&i| (corners[i].1, corners[i].0)) {
+        corners.rotate_left(k);
+    }
+    if let Some(&f) = corners.first() {
+        corners.push(f);
+    }
+    corners
+}
+
+/// Absolute shoelace area of a closed vertex list.
+fn polygon_area(pts: &[(i32, i32)]) -> u64 {
+    let s: i64 = pts.windows(2).map(|p| p[0].0 as i64 * p[1].1 as i64 - p[1].0 as i64 * p[0].1 as i64).sum();
+    s.unsigned_abs() / 2
+}
+
+fn contour_to_subpath(pts: Vec<(i32, i32)>, outer: bool, off: (i32, i32), p: &VecParams) -> Option<Subpath> {
+    let path = PathI32 { path: pts.into_iter().map(|(x, y)| PointI32 { x: x + off.0, y: y + off.1 }).collect() };
+    if path.path.len() < 4 {
+        return None;
+    }
     match p.curve_mode {
-        CurveMode::Pixel | CurveMode::Polygon => {
-            let mode = if p.curve_mode == CurveMode::Pixel { PathSimplifyMode::None } else { PathSimplifyMode::Polygon };
-            let path = PathI32::image_to_path(img, outer, mode);
-            let pts: Vec<(f64, f64)> = path.path.iter().map(|q| (q.x as f64 + ox, q.y as f64 + oy)).collect();
-            (pts.len() >= 3).then_some(Subpath::Polygon(pts))
+        CurveMode::Pixel => Some(Subpath::Polygon(path.path.iter().map(|q| (q.x as f64, q.y as f64)).collect())),
+        CurveMode::Polygon => {
+            let simp = path.simplify(outer);
+            (simp.path.len() >= 3).then(|| Subpath::Polygon(simp.path.iter().map(|q| (q.x as f64, q.y as f64)).collect()))
         }
         CurveMode::Spline => {
-            let spline = Spline::from_image(
-                img,
-                outer,
+            // Same steps as visioncortex Spline::from_image, on our own contour.
+            let simp = path.simplify(outer);
+            if simp.path.len() < 3 {
+                return None;
+            }
+            let smooth = simp.smooth(
                 (p.corner_threshold_deg as f64).to_radians(),
                 OUTSET_RATIO,
                 p.length_threshold.max(0.5) as f64,
                 p.max_iterations.max(1) as usize,
-                (p.splice_threshold_deg as f64).to_radians(),
             );
+            if smooth.path.len() < 3 {
+                return None;
+            }
+            let spline = Spline::from_path_f64(&smooth, (p.splice_threshold_deg as f64).to_radians());
             if spline.is_empty() || spline.points.iter().any(|q| !q.x.is_finite() || !q.y.is_finite()) {
                 return None;
             }
-            let start = (spline.points[0].x + ox, spline.points[0].y + oy);
+            let start = (spline.points[0].x, spline.points[0].y);
             let segs = spline.points[1..]
                 .as_chunks::<3>()
                 .0
                 .iter()
-                .map(|c| [(c[0].x + ox, c[0].y + oy), (c[1].x + ox, c[1].y + oy), (c[2].x + ox, c[2].y + oy)])
+                .map(|c| [(c[0].x, c[0].y), (c[1].x, c[1].y), (c[2].x, c[2].y)])
                 .collect();
             Some(Subpath::Cubic { start, segs })
         }
     }
 }
 
-/// Traces one component (outer boundary + holes) into subpaths in working coordinates.
-fn trace_component(labels: &[u32], lw: usize, id: u32, c: &Comp, origin: (usize, usize), p: &VecParams) -> Vec<Subpath> {
-    let (cw, ch) = (c.x1 - c.x0, c.y1 - c.y0);
-    let mut outer = BinaryImage::new_w_h(cw, ch);
-    for y in 0..ch {
-        let row = (c.y0 + y) * lw + c.x0;
-        for x in 0..cw {
-            if labels[row + x] == id {
-                outer.set_pixel(x, y, true);
-            }
-        }
-    }
-    let (hl, holes) = label_components(cw, ch, |i| !outer.get_pixel(i % cw, i / cw));
-    let mut hole_imgs = Vec::new();
-    for (hi, h) in holes.iter().enumerate() {
-        if h.x0 == 0 || h.y0 == 0 || h.x1 == cw || h.y1 == ch {
-            continue; // touches the bbox border: outside, not a hole
-        }
-        let hid = hi as u32 + 1;
-        let keep = h.area >= p.filter_speckle.max(1);
-        let mut himg = keep.then(|| BinaryImage::new_w_h(h.x1 - h.x0, h.y1 - h.y0));
-        for y in h.y0..h.y1 {
-            for x in h.x0..h.x1 {
-                if hl[y * cw + x] == hid {
-                    outer.set_pixel(x, y, true);
-                    if let Some(img) = himg.as_mut() {
-                        img.set_pixel(x - h.x0, y - h.y0, true);
-                    }
-                }
-            }
-        }
-        if let Some(img) = himg {
-            hole_imgs.push((img, (h.x0, h.y0)));
-        }
-    }
-    let base = ((origin.0 + c.x0) as i32, (origin.1 + c.y0) as i32);
-    let mut out = Vec::with_capacity(1 + hole_imgs.len());
-    match boundary_to_subpath(&outer, true, base, p) {
+/// Traces one component (outer contour + holes >= filter_speckle) into
+/// subpaths in working coordinates. Work is proportional to component area.
+#[allow(clippy::too_many_arguments)]
+fn trace_component(labels: &[u32], order: &[u32], lw: usize, lh: usize, id: u32, c: &Comp, origin: (usize, usize), visited: &mut [u8], p: &VecParams) -> Vec<Subpath> {
+    let pixels = &order[c.start..c.start + c.area as usize];
+    let off = (origin.0 as i32, origin.1 as i32);
+    let first = pixels[0] as usize;
+    let outer = trace_contour(labels, lw, lh, id, visited, (first % lw) as i32, (first / lw) as i32, 0);
+    let mut out = Vec::new();
+    match contour_to_subpath(outer, true, off, p) {
         Some(sp) => out.push(sp),
         None => return out,
     }
-    for (himg, (hx, hy)) in &hole_imgs {
-        if let Some(sp) = boundary_to_subpath(himg, false, (base.0 + *hx as i32, base.1 + *hy as i32), p) {
-            out.push(sp);
+    let min_hole = p.filter_speckle.max(1) as u64;
+    for &i in pixels {
+        let i = i as usize;
+        let (x, y) = ((i % lw) as i32, (i / lw) as i32);
+        for side in 0..4 {
+            if visited[i] & (1 << side) != 0 {
+                continue;
+            }
+            let o = DIRS[(side + 1) % 4];
+            let (nx, ny) = (x - o.0, y - o.1);
+            let neighbour_in = nx >= 0 && ny >= 0 && (nx as usize) < lw && (ny as usize) < lh && labels[ny as usize * lw + nx as usize] == id;
+            if neighbour_in {
+                continue;
+            }
+            // Every contour other than the outer one bounds a hole.
+            let hole = trace_contour(labels, lw, lh, id, visited, x, y, side);
+            if polygon_area(&hole) >= min_hole {
+                if let Some(sp) = contour_to_subpath(hole, false, off, p) {
+                    out.push(sp);
+                }
+            }
         }
     }
     out
@@ -247,12 +317,13 @@ pub fn vectorize(q: &Quantized, params: &VecParams) -> Vec<RawShape> {
             let l = q.labels[(by0 + i / bw) * w + bx0 + i % bw];
             if stacked { valid(l) && rank[l as usize] >= r } else { l as usize == color && valid(l) }
         };
-        let (labels, comps) = label_components(bw, bh, in_layer);
+        let (labels, comps, order_px) = label_components(bw, bh, in_layer);
+        let mut visited = vec![0u8; bw * bh];
         for (ci, c) in comps.iter().enumerate() {
             if c.area < params.filter_speckle {
                 continue;
             }
-            let subs = trace_component(&labels, bw, ci as u32 + 1, c, (bx0, by0), params);
+            let subs = trace_component(&labels, &order_px, bw, bh, ci as u32 + 1, c, (bx0, by0), &mut visited, params);
             if subs.is_empty() {
                 continue;
             }
@@ -270,4 +341,84 @@ pub fn vectorize(q: &Quantized, params: &VecParams) -> Vec<RawShape> {
         }
     }
     shapes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use visioncortex::{BinaryImage, PathSimplifyMode};
+
+    fn has_pinch(img: &BinaryImage) -> bool {
+        let g = |x: i32, y: i32| img.get_pixel_safe(x, y);
+        (-1..img.height as i32).any(|y| {
+            (-1..img.width as i32).any(|x| {
+                let (a, b, c, d) = (g(x, y), g(x + 1, y), g(x, y + 1), g(x + 1, y + 1));
+                (a && d && !b && !c) || (b && c && !a && !d)
+            })
+        })
+    }
+
+    /// Our contour follower must reproduce visioncortex's PathWalker output on
+    /// pinch-free shapes, so Polygon/Spline simplification sees identical input.
+    #[test]
+    fn outer_contour_matches_visioncortex_walker() {
+        let mut seed = 0x2545_f491_u32;
+        let mut rnd = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed
+        };
+        let mut checked = 0;
+        for _ in 0..400 {
+            let (w, h) = (3 + (rnd() % 10) as usize, 3 + (rnd() % 10) as usize);
+            let bits: Vec<bool> = (0..w * h).map(|_| rnd() % 3 != 0).collect();
+            let (labels, comps, order) = label_components(w, h, |i| bits[i]);
+            for (ci, c) in comps.iter().enumerate() {
+                let id = ci as u32 + 1;
+                let mut img = BinaryImage::new_w_h(w, h);
+                for (i, &l) in labels.iter().enumerate() {
+                    img.set_pixel(i % w, i / w, l == id);
+                }
+                if has_pinch(&img) {
+                    continue;
+                }
+                let first = order[c.start] as usize;
+                let mut visited = vec![0u8; w * h];
+                let ours = trace_contour(&labels, w, h, id, &mut visited, (first % w) as i32, (first / w) as i32, 0);
+                let theirs: Vec<(i32, i32)> = PathI32::image_to_path(&img, true, PathSimplifyMode::None).path.iter().map(|p| (p.x, p.y)).collect();
+                assert_eq!(ours, theirs, "{w}x{h} comp {id}");
+                checked += 1;
+            }
+        }
+        assert!(checked > 100, "only {checked} shapes checked");
+    }
+
+    #[test]
+    fn hole_contours_wind_opposite_and_cover_every_edge() {
+        // 7x7 square with a 3x3 hole and a 1px island inside the hole.
+        let (w, h) = (9, 9);
+        let bits: Vec<bool> = (0..w * h)
+            .map(|i| {
+                let (x, y) = (i % w, i / w);
+                let ring = (1..8).contains(&x) && (1..8).contains(&y) && !((3..6).contains(&x) && (3..6).contains(&y));
+                ring || (x == 4 && y == 4)
+            })
+            .collect();
+        let (labels, comps, order) = label_components(w, h, |i| bits[i]);
+        assert_eq!(comps.len(), 2);
+        let mut visited = vec![0u8; w * h];
+        let p = VecParams { curve_mode: CurveMode::Pixel, filter_speckle: 0, ..VecParams::default() };
+        let subs = trace_component(&labels, &order, w, h, 1, &comps[0], (0, 0), &mut visited, &p);
+        assert_eq!(
+            subs,
+            vec![
+                Subpath::Polygon(vec![(1.0, 1.0), (8.0, 1.0), (8.0, 8.0), (1.0, 8.0), (1.0, 1.0)]),
+                Subpath::Polygon(vec![(3.0, 3.0), (3.0, 6.0), (6.0, 6.0), (6.0, 3.0), (3.0, 3.0)]),
+            ]
+        );
+        // Every boundary edge of the ring was consumed by exactly those two contours.
+        let edges: u32 = visited.iter().map(|v| v.count_ones()).sum();
+        assert_eq!(edges, 7 * 4 + 3 * 4);
+    }
 }
