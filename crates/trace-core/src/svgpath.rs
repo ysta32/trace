@@ -244,7 +244,15 @@ pub fn format_path_step(subpaths: &[Subpath], mul: f64, step: i64) -> (String, u
                         out.pop();
                     }
                 }
-                if out.len() < 2 {
+                // Keep anything enclosing area: two or more segments, or a single
+                // cubic whose control polygon is not collinear (closed implicitly).
+                let keep = match out.as_slice() {
+                    [] => false,
+                    [(None, _)] => false,
+                    [(Some((c1, c2)), p)] => !collinear(&[s0, *c1, *c2, *p]),
+                    _ => true,
+                };
+                if !keep {
                     continue;
                 }
                 w.move_to(s0);
@@ -259,6 +267,16 @@ pub fn format_path_step(subpaths: &[Subpath], mul: f64, step: i64) -> (String, u
         }
     }
     (w.out, w.nodes)
+}
+
+/// True if all points lie on one line (or coincide).
+fn collinear(pts: &[Pt]) -> bool {
+    let o = pts[0];
+    let Some(&d) = pts.iter().find(|&&p| p != o) else {
+        return true;
+    };
+    pts.iter()
+        .all(|&p| (d.0 - o.0) as i128 * (p.1 - o.1) as i128 - (d.1 - o.1) as i128 * (p.0 - o.0) as i128 == 0)
 }
 
 /// Removes vertices lying exactly on the straight line between their

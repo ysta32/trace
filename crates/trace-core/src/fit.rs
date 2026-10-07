@@ -157,10 +157,7 @@ pub fn fit_contour(corners: &[(i32, i32)], fp: &FitParams) -> Option<(P, Vec<Seg
     };
     let tk = (k as usize).max(2);
     let mut beziers: Vec<[P; 4]> = Vec::new();
-    let nb = breaks.len();
-    for bi in 0..nb {
-        let b0 = breaks[bi];
-        let b1 = if bi + 1 < nb { breaks[bi + 1] } else { breaks[0] + n };
+    for (b0, b1) in run_bounds(&breaks, n) {
         let pts: Vec<P> = (b0..=b1).map(|i| sm[i % n]).collect();
         let m = pts.len();
         if m < 2 {
@@ -195,6 +192,26 @@ pub fn fit_contour(corners: &[(i32, i32)], fp: &FitParams) -> Option<(P, Vec<Seg
         })
         .collect();
     Some((start, segs))
+}
+
+/// Runs (b0, b1) between cyclically consecutive break indices on a closed
+/// contour of `n` points, with b0 < n and b0 < b1 <= b0 + n (indices taken
+/// modulo n). The runs cover the contour exactly once.
+pub(crate) fn run_bounds(breaks: &[usize], n: usize) -> Vec<(usize, usize)> {
+    let mut b: Vec<usize> = breaks.iter().map(|&i| i % n.max(1)).collect();
+    b.sort_unstable();
+    b.dedup();
+    if b.is_empty() || n == 0 {
+        return Vec::new();
+    }
+    let nb = b.len();
+    (0..nb)
+        .map(|i| {
+            let b0 = b[i];
+            let b1 = if i + 1 < nb { b[i + 1] } else { b[0] + n };
+            (b0, b1)
+        })
+        .collect()
 }
 
 /// Control points within `eps` of the chord and projecting inside it.
@@ -367,4 +384,26 @@ fn fit_cubic(d: &[P], t1: P, t2: P, tol: f64, out: &mut Vec<[P; 4]>, depth: u32)
     }
     fit_cubic(&d[..=split], t1, tc, tol, out, depth + 1);
     fit_cubic(&d[split..], mul(tc, -1.0), t2, tol, out, depth + 1);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::run_bounds;
+
+    #[test]
+    fn run_bounds_cover_contour_once_in_order() {
+        // Regression: a single corner at 22 of 30 put its opposite join at 7,
+        // which used to produce an empty run and a 1.5-lap run.
+        assert_eq!(run_bounds(&[22, 7], 30), vec![(7, 22), (22, 37)]);
+        assert_eq!(run_bounds(&[0, 10, 20], 30), vec![(0, 10), (10, 20), (20, 30)]);
+        assert_eq!(run_bounds(&[5], 30), vec![(5, 35)]);
+        for n in 4..40 {
+            for c in 0..n {
+                let runs = run_bounds(&[c, (c + n / 2) % n], n);
+                let total: usize = runs.iter().map(|(a, b)| b - a).sum();
+                assert_eq!(total, n, "n={n} c={c}");
+                assert!(runs.iter().all(|&(a, b)| a < n && a < b && b <= a + n));
+            }
+        }
+    }
 }
