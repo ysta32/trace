@@ -7,6 +7,7 @@ export function Dropzone() {
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // the window-level drop handler must not load it again
     setOver(false);
     const f = e.dataTransfer?.files[0];
     if (f) void loadFile(f);

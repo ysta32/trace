@@ -1,18 +1,28 @@
 import { setImage, error } from './store';
 
+let loadGen = 0;
+
 export async function loadBlob(blob: Blob, name: string): Promise<void> {
+  const gen = ++loadGen;
+  let url: string | null = null;
   try {
     const bytes = new Uint8Array(await blob.arrayBuffer());
-    const url = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(blob);
+    url = objectUrl;
     const dims = await new Promise<{ w: number; h: number }>((resolve, reject) => {
       const im = new Image();
       im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight });
       im.onerror = () => reject(new Error('Could not decode this image'));
-      im.src = url;
-    }).catch((e) => { URL.revokeObjectURL(url); throw e; });
-    setImage({ name, bytes, url, width: dims.w, height: dims.h });
+      im.src = objectUrl;
+    });
+    if (gen !== loadGen) {
+      URL.revokeObjectURL(objectUrl); // superseded by a newer load
+      return;
+    }
+    setImage({ name, bytes, url: objectUrl, width: dims.w, height: dims.h });
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e);
+    if (url) URL.revokeObjectURL(url);
+    if (gen === loadGen) error.value = e instanceof Error ? e.message : String(e);
   }
 }
 
