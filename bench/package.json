@@ -11,6 +11,7 @@
     "imagetracerjs": "^1.2.6",
     "pngjs": "^7.0.0",
     "potrace": "^2.1.8",
+    "trace-vectorizer": "*",
     "ssim.js": "^3.5.0"
   }
 }

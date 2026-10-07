@@ -31,8 +31,9 @@ async function loadOurs(): Promise<ToolFn> {
   try {
     mod = await import('trace-vectorizer');
   } catch (e1) {
-    const alt = join(here, '..', 'packages', 'trace-vectorizer', 'src', 'index.ts');
-    if (!existsSync(alt)) throw new Error(`trace-vectorizer not available: ${(e1 as Error).message}`);
+    const pkg = join(here, '..', 'packages', 'trace-vectorizer');
+    const alt = [join(pkg, 'dist', 'index.js'), join(pkg, 'src', 'index.ts')].find(existsSync) ?? '';
+    if (!alt) throw new Error(`trace-vectorizer not available: ${(e1 as Error).message}`);
     mod = await import(alt);
   }
   return async (png) => {
@@ -85,6 +86,18 @@ function rasterize(svg: string, width: number, height: number): { png: Buffer; i
   }
   return { png, img };
 }
+function channelSsim(a: { width: number; height: number; data: Uint8ClampedArray }, b: { width: number; height: number; data: Uint8ClampedArray }): number {
+  let total = 0;
+  for (let c = 0; c < 3; c++) {
+    const planes = [a, b].map((im) => {
+      const data = new Uint8ClampedArray(im.data.length);
+      for (let i = 0; i < data.length; i += 4) { data[i] = data[i + 1] = data[i + 2] = im.data[i + c]; data[i + 3] = 255; }
+      return { width: im.width, height: im.height, data };
+    });
+    total += ssim(planes[0] as any, planes[1] as any, { ssim: 'original' } as any).mssim;
+  }
+  return total / 3;
+}
 function flatten(img: { width: number; height: number; data: Uint8Array }) {
   const d = new Uint8ClampedArray(img.data.length);
   for (let i = 0; i < d.length; i += 4) {
@@ -97,10 +110,24 @@ function flatten(img: { width: number; height: number; data: Uint8Array }) {
 function countPaths(svg: string): number {
   return (svg.match(/<path\b/g) ?? []).length;
 }
+/** Geometric nodes: segment endpoints (M/L/H/V/C/S/Q/T/A each count 1 per implicit repeat); Z is not a node. */
 function countNodes(svg: string): number {
-  let n = 0;
-  for (const m of svg.matchAll(/<path\b[^>]*?\sd="([^"]*)"/g)) n += (m[1].match(/[MLHVCSQTAZmlhvcsqtaz]/g) ?? []).length;
-  return n;
+  const argc: Record<string, number> = { M: 2, L: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, T: 2, A: 7 };
+  let nodes = 0;
+  for (const m of svg.matchAll(/<path\b[^>]*?\sd="([^"]*)"/g)) {
+    const tokens = m[1].match(/[A-Za-z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/g) ?? [];
+    let cmd = '';
+    for (let i = 0; i < tokens.length;) {
+      if (/[A-Za-z]/.test(tokens[i])) { cmd = tokens[i].toUpperCase(); i++; if (cmd === 'Z') cmd = ''; continue; }
+      const n = argc[cmd];
+      if (!n) { i++; continue; }
+      // arc flags may be packed without separators only in minified output; tokens here assume separated numbers
+      i += n;
+      nodes++;
+      if (cmd === 'M') cmd = 'L';
+    }
+  }
+  return nodes;
 }
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
@@ -150,7 +177,7 @@ for (const f of files) {
       row.paths = countPaths(svg);
       row.nodes = countNodes(svg);
       const r = rasterize(svg, src.width, src.height);
-      row.ssim = Math.round(ssim(srcFlat as any, flatten(r.img) as any).mssim * 10000) / 10000;
+      row.ssim = Math.round(channelSsim(srcFlat, flatten(r.img)) * 10000) / 10000;
       pl.push({ tool: t, png: r.png, caption: `${t}  SSIM ${row.ssim.toFixed(4)}  paths ${row.paths}  nodes ${row.nodes}  ${(row.bytes / 1024).toFixed(1)}KB  ${row.ms}ms` });
     } catch (e) {
       row.error = (e as Error).message.split('\n')[0];
@@ -188,7 +215,7 @@ writeFileSync(join(OUT, 'results.json'), JSON.stringify({ generated: new Date().
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
 const fmt = (v: number | undefined, d = 0) => (v === undefined || Number.isNaN(v) ? '-' : v.toFixed(d));
 const toolTitle = (t: string) => t;
-let md = `# Benchmark results\n\nSSIM is computed on luminance between the source and the SVG rasterized at source size on white (higher is better). Winner per row (bold) is the highest SSIM; ties and errored tools excluded. \`vtracer\` is skipped (no usable npm/WASM build). potrace uses \`trace\` for lineart and \`posterize\` otherwise.\n\n`;
+let md = `# Benchmark results\n\nSSIM is computed per R/G/B channel (averaged) between the source and the SVG rasterized at source size on white (higher is better). Winner per row (bold) is the highest SSIM; ties and errored tools excluded. \`vtracer\` is skipped (no usable npm/WASM build). potrace uses \`trace\` for lineart and \`posterize\` otherwise.\n\n`;
 const header = `| image | tool | SSIM | paths | nodes | bytes | ms |\n|---|---|---:|---:|---:|---:|---:|\n`;
 for (const cat of CATS) {
   const cr = rows.filter((r) => r.category === cat);
