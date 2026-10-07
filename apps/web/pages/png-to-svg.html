@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PNG to SVG Converter — Free &amp; Private | Trace</title>
+    <meta name="description" content="Convert PNG to editable SVG in your browser with Trace. Tune colors, compare outlines, and export vector artwork for free without uploading your images.">
+    <link rel="canonical" href="https://trace-vectorizer.vercel.app/pages/png-to-svg.html">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Trace">
+    <meta property="og:title" content="PNG to SVG Converter — Free &amp; Private | Trace">
+    <meta property="og:description" content="Convert PNG to editable SVG in your browser with Trace. Tune colors, compare outlines, and export vector artwork for free without uploading your images.">
+    <meta property="og:url" content="https://trace-vectorizer.vercel.app/pages/png-to-svg.html">
+    <meta property="og:image" content="https://trace-vectorizer.vercel.app/og.svg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Trace — free, private image vectorization">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/src/seo.css">
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Trace",
+      "url": "https://trace-vectorizer.vercel.app/",
+      "applicationCategory": "DesignApplication",
+      "operatingSystem": "Web browser",
+      "description": "Convert PNG to editable SVG in your browser with Trace. Tune colors, compare outlines, and export vector artwork for free without uploading your images.",
+      "license": "https://opensource.org/license/mit",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://trace-vectorizer.vercel.app/pages/png-to-svg.html#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Does renaming a PNG to SVG convert it?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. A filename change does not create vector paths. Tracing analyzes the visible regions and builds shapes that can be resized and edited."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Will the SVG always be smaller?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Complex textures can produce many shapes and a larger file. A simpler palette may help, but preserve the details your design needs."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Are my PNG images uploaded?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Trace processes images in your browser using WebAssembly. The image conversion takes place on your device, and using the converter is free."
+          }
+        }
+      ]
+    }
+  ]
+}
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Trace home"><img src="/favicon.svg" width="32" height="32" alt="">Trace</a>
+      <nav aria-label="Main navigation">
+          <a href="/pages/png-to-svg.html">PNG to SVG</a>
+          <a href="/pages/free-logo-vectorizer.html">Logo vectorizer</a>
+          <a href="/pages/vectorizer-ai-alternative.html">Vectorizer.AI alternative</a>
+          <a href="/pages/jpg-to-svg.html">JPG to SVG</a>
+          <a href="/pages/image-to-svg-converter.html">Image to SVG</a>
+      </nav>
+      <a class="button button-small" href="/">Open Trace <span aria-hidden="true">↗</span></a>
+    </header>
+    <main id="main">
+      <section class="hero" aria-labelledby="page-title">
+        <p class="eyebrow">TRACE / RASTER TO VECTOR</p>
+        <h1 id="page-title">PNG to SVG, with control over every color</h1>
+        <p class="lede">Turn a pixel-based PNG into editable vector shapes. Trace runs locally in your browser through WebAssembly, so your images never leave your device for processing.</p>
+        <a class="button" href="/">Start vectorizing free <span aria-hidden="true">→</span></a>
+        <p class="hero-note">Free to use · Images stay on your device · Open source</p>
+      </section>
+      <article class="content" aria-label="Conversion guide">
+
+<h2>When a PNG is ready for vector tracing</h2>
+<p>PNG is a good starting point for logos, icons, diagrams, and flat illustrations because it avoids the compression artifacts that can appear in JPEG files. An SVG describes shapes instead of storing a fixed grid of pixels. Those shapes stay crisp when resized, and their fills can be edited independently. Trace helps you move between these two representations without uploading your artwork.</p>
+<p>Conversion is an interpretation of the pixels, not a recovery of the original design file. A tiny PNG cannot reveal a curve that was never captured clearly. Start with the largest clean source you have, ideally an original export rather than a screenshot. For artwork with soft shadows or photographic texture, consider whether keeping a raster image would better preserve its appearance.</p>
+<h2>How to convert a PNG to SVG</h2>
+<ol>
+<li><strong>Open your PNG in Trace.</strong> Use the app at the link above and choose your source image. Keep the original file so you can compare it with later versions.</li>
+<li><strong>Choose a useful starting preset.</strong> Logo suits flat brand artwork, line art suits drawings, and pixel art is a better starting point for deliberately stepped edges. Photo poster is for a stylized interpretation of photographs.</li>
+<li><strong>Review the palette.</strong> Begin with automatic palette and color count detection. Reduce the count if a simple design contains many nearly identical shades; increase it if meaningful color regions disappear.</li>
+<li><strong>Compare and refine.</strong> Move the split-slider preview across important contours. Edit palette colors, then select individual shapes to recolor or delete stray pieces.</li>
+<li><strong>Export SVG and inspect it.</strong> Open the result in its destination application and check it at both its intended size and a larger zoom.</li>
+</ol>
+<h2>Keep edges clean without losing character</h2>
+<p>Anti-aliasing adds intermediate pixels around an edge to make it look smooth. Those shades are usually not separate design colors. A smaller palette can help simplify the result, but too few colors may merge neighboring regions that need to remain distinct. Check holes inside letters, thin strokes, and narrow spaces before deciding that fewer colors is better.</p>
+<p>A transparent PNG can still have faint edge pixels, and a white area may be actual artwork rather than empty background. Inspect the traced shapes before deleting anything. If you plan to place the SVG on several backgrounds, test it against both light and dark surfaces in your design application. This makes unwanted edge halos easier to notice.</p>
+<h2>Choose an export for the next step</h2>
+<p>SVG is a practical choice for web graphics and further vector editing. Trace also exports PDF, EPS, DXF, and PNG. PNG remains a raster output, so choose it when you need a finished bitmap rather than editable paths. For print or fabrication, confirm the receiving application's requirements and inspect dimensions and geometry after import.</p>
+<p>For repeated work, batch conversion helps you process a set of assets. The CLI and npm package are available for developer workflows: install with <code>npm i trace-vectorizer</code>. Trace is open source under the MIT license, with code at <a href="https://github.com/ysta32/trace">GitHub</a>. Keep a representative sample as a quality check before applying one set of choices to a whole collection.</p>
+
+        <section id="faq" aria-labelledby="faq-heading">
+          <h2 id="faq-heading">Frequently asked questions</h2>
+          <details><summary>Does renaming a PNG to SVG convert it?</summary><p>No. A filename change does not create vector paths. Tracing analyzes the visible regions and builds shapes that can be resized and edited.</p></details>
+          <details><summary>Will the SVG always be smaller?</summary><p>No. Complex textures can produce many shapes and a larger file. A simpler palette may help, but preserve the details your design needs.</p></details>
+          <details><summary>Are my PNG images uploaded?</summary><p>No. Trace processes images in your browser using WebAssembly. The image conversion takes place on your device, and using the converter is free.</p></details>
+        </section>
+        <aside class="closing" aria-label="Try Trace">
+          <h2>Make your next image scalable.</h2>
+          <p>Bring your artwork, inspect the shapes, and export a result that fits your workflow.</p>
+          <a class="button" href="/">Open the free converter <span aria-hidden="true">→</span></a>
+        </aside>
+      </article>
+    </main>
+    <footer class="site-footer">
+      <div><a class="brand" href="/">Trace</a><p>Pixels into possibilities. On your device.</p></div>
+      <nav aria-label="Conversion guides">
+          <a href="/pages/png-to-svg.html">PNG to SVG</a>
+          <a href="/pages/free-logo-vectorizer.html">Logo vectorizer</a>
+          <a href="/pages/vectorizer-ai-alternative.html">Vectorizer.AI alternative</a>
+          <a href="/pages/jpg-to-svg.html">JPG to SVG</a>
+          <a href="/pages/image-to-svg-converter.html">Image to SVG</a>
+      </nav>
+      <p><a href="https://github.com/ysta32/trace">Source code · MIT license</a></p>
+    </footer>
+  </body>
+</html>

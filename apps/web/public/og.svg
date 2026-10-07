@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none" role="img" aria-labelledby="title description">
+  <title id="title">Trace — free, private vectorization</title>
+  <desc id="description">Turn pixels into possibilities with Trace. Raster to vector, on your device. Free, private, open source.</desc>
+  <rect width="1200" height="630" fill="#111b16"/>
+  <circle cx="1045" cy="300" r="260" fill="#20372a"/>
+  <g font-family="system-ui, -apple-system, sans-serif">
+    <text x="80" y="110" fill="#9ce2b6" font-size="40" font-weight="750">Trace</text>
+    <text x="80" y="252" fill="#e9f3ed" font-size="72" font-weight="750" letter-spacing="-3">Turn pixels into</text>
+    <text x="80" y="338" fill="#e9f3ed" font-size="72" font-weight="750" letter-spacing="-3">possibilities.</text>
+    <text x="84" y="407" fill="#adc2b4" font-size="28">Raster to vector. On your device.</text>
+    <text x="84" y="542" fill="#9ce2b6" font-size="24">FREE · PRIVATE · OPEN SOURCE</text>
+  </g>
+  <g stroke="#9ce2b6" stroke-width="5">
+    <path d="M840 404c0-170 250-170 250 0"/>
+    <path d="M840 404V225h250v179" stroke-width="2" stroke-dasharray="7 9" opacity="0.6"/>
+    <rect x="831" y="395" width="18" height="18" rx="2" fill="#111b16"/>
+    <rect x="1081" y="395" width="18" height="18" rx="2" fill="#111b16"/>
+    <circle cx="840" cy="225" r="7" fill="#9ce2b6"/>
+    <circle cx="1090" cy="225" r="7" fill="#9ce2b6"/>
+  </g>
+</svg>
