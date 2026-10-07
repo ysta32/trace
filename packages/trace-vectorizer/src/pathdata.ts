@@ -11,8 +11,9 @@ const numberPattern = /[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/y;
 export function parsePathData(d: string): PathSegment[] {
   const tokens: (string | number)[] = [];
   for (let i = 0; i < d.length;) {
-    if (/[\s,]/.test(d[i])) { i++; continue; }
-    if (/[MLCQZHVmlcqzhv]/.test(d[i])) { tokens.push(d[i++]); continue; }
+    const character = d.charAt(i);
+    if (/[\s,]/.test(character)) { i++; continue; }
+    if (/[MLCQZHVmlcqzhv]/.test(character)) { tokens.push(character); i++; continue; }
     numberPattern.lastIndex = i;
     const match = numberPattern.exec(d);
     if (!match || !Number.isFinite(Number(match[0]))) {
@@ -24,7 +25,8 @@ export function parsePathData(d: string): PathSegment[] {
   const segments: PathSegment[] = [];
   let x = 0, y = 0, startX = 0, startY = 0, i = 0, command = '';
   while (i < tokens.length) {
-    if (typeof tokens[i] === 'string') command = tokens[i++] as string;
+    const token = tokens[i];
+    if (typeof token === 'string') { command = token; i++; }
     if (!command || (segments.length === 0 && command.toUpperCase() !== 'M')) {
       throw new Error('SVG path must begin with moveto');
     }
@@ -41,9 +43,13 @@ export function parsePathData(d: string): PathSegment[] {
       throw new Error(`Missing coordinates for SVG command ${command}`);
     }
     i += count;
-    const v = values as number[];
-    const px = (index: number): number => v[index] + (relative ? x : 0);
-    const py = (index: number): number => v[index] + (relative ? y : 0);
+    const coordinate = (index: number): number => {
+      const value = values[index];
+      if (typeof value !== 'number') throw new Error(`Missing coordinates for SVG command ${command}`);
+      return value;
+    };
+    const px = (index: number): number => coordinate(index) + (relative ? x : 0);
+    const py = (index: number): number => coordinate(index) + (relative ? y : 0);
     let segment: Exclude<PathSegment, { command: 'Z' }>;
     if (upper === 'H') segment = { command: 'L', x: px(0), y };
     else if (upper === 'V') segment = { command: 'L', x, y: py(0) };
@@ -81,18 +87,23 @@ export function flattenPath(segments: readonly PathSegment[] | string, tolerance
   const paths: Polyline[] = [];
   let path: Polyline | undefined;
   let current: Point = { x: 0, y: 0 };
+  const pointAt = (points: Point[], index: number): Point => {
+    const point = points[index];
+    if (!point) throw new Error('Missing curve point');
+    return point;
+  };
   const flatten = (points: Point[], output: Point[], depth = 0): void => {
-    const end = points[points.length - 1];
-    if (points.slice(1, -1).every(p => distanceToSegment(p, points[0], end) <= tolerance)) {
+    const start = pointAt(points, 0), end = pointAt(points, points.length - 1);
+    if (points.slice(1, -1).every(p => distanceToSegment(p, start, end) <= tolerance)) {
       output.push(end);
       return;
     }
     if (depth >= 24) throw new Error('Curve cannot be flattened at the requested tolerance');
-    const left = [points[0]], right = [end];
+    const left = [start], right = [end];
     let level = points;
     while (level.length > 1) {
-      level = level.slice(1).map((p, i) => midpoint(level[i], p));
-      left.push(level[0]); right.unshift(level[level.length - 1]);
+      level = level.slice(1).map((p, i) => midpoint(pointAt(level, i), p));
+      left.push(pointAt(level, 0)); right.unshift(pointAt(level, level.length - 1));
     }
     flatten(left, output, depth + 1);
     flatten(right, output, depth + 1);
@@ -103,7 +114,7 @@ export function flattenPath(segments: readonly PathSegment[] | string, tolerance
       path = { points: [current], closed: false };
       paths.push(path);
     } else if (segment.command === 'Z') {
-      if (path) { path.closed = true; current = path.points[0]; }
+      if (path) { path.closed = true; current = pointAt(path.points, 0); }
     } else {
       if (!path || path.closed) {
         path = { points: [current], closed: false };

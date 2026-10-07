@@ -5,11 +5,13 @@ import type { SvgOptions, TraceResult } from './types.js';
 export interface DxfOptions extends SvgOptions { tolerance?: number }
 
 function colorIndex(color: string): number {
-  const rgb = [1, 3, 5].map(offset => parseInt(color.slice(offset, offset + 2), 16));
-  const colors = [[255, 0, 0], [255, 255, 0], [0, 255, 0], [0, 255, 255], [0, 0, 255], [255, 0, 255], [255, 255, 255], [128, 128, 128], [192, 192, 192]];
+  const red = parseInt(color.slice(1, 3), 16);
+  const green = parseInt(color.slice(3, 5), 16);
+  const blue = parseInt(color.slice(5, 7), 16);
+  const colors = [[255, 0, 0], [255, 255, 0], [0, 255, 0], [0, 255, 255], [0, 0, 255], [255, 0, 255], [255, 255, 255], [128, 128, 128], [192, 192, 192]] as const;
   let best = 7, distance = Infinity;
   colors.forEach((candidate, index) => {
-    const delta = candidate.reduce((sum, channel, i) => sum + (channel - rgb[i]) ** 2, 0);
+    const delta = (candidate[0] - red) ** 2 + (candidate[1] - green) ** 2 + (candidate[2] - blue) ** 2;
     if (delta < distance) { best = index + 1; distance = delta; }
   });
   return best;
@@ -34,7 +36,8 @@ export function toDxf(result: TraceResult, opts: DxfOptions = {}): string {
     for (const path of flattenPath(shape.d, opts.tolerance ?? 0.25)) {
       if (path.points.length < 2) continue;
       const points = [...path.points];
-      if (points.length > 2 && points[0].x === points[points.length - 1].x && points[0].y === points[points.length - 1].y) points.pop();
+      const first = points[0], last = points[points.length - 1];
+      if (points.length > 2 && first && last && first.x === last.x && first.y === last.y) points.pop();
       pair(0, 'POLYLINE'); pair(8, layer(color)); pair(66, 1); pair(10, 0); pair(20, 0); pair(30, 0); pair(70, 1);
       for (const point of points) {
         pair(0, 'VERTEX'); pair(8, layer(color)); pair(10, formatNumber(point.x, opts.precision ?? 6)); pair(20, formatNumber(result.height - point.y, opts.precision ?? 6)); pair(30, 0);

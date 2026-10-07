@@ -6,8 +6,9 @@ export function fillColor(result: TraceResult, shape: Shape, opts: SvgOptions): 
   const reference = /^url\(#([^)]*)\)$/.exec(fill);
   if (reference) {
     const gradient = result.gradients.find(item => item.id === reference[1]);
-    if (!gradient?.stops.length) throw new Error(`Missing gradient stops for ${reference[1]}`);
-    fill = gradient.stops[Math.floor(gradient.stops.length / 2)].color;
+    const stop = gradient?.stops[Math.floor(gradient.stops.length / 2)];
+    if (!stop) throw new Error(`Missing gradient stops for ${reference[1]}`);
+    fill = stop.color;
   }
   if (/^#[\da-f]{3}$/i.test(fill)) fill = '#' + [...fill.slice(1)].map(c => c + c).join('');
   if (!/^#[\da-f]{6}$/i.test(fill)) throw new Error(`Unsupported fill color: ${fill}`);
@@ -26,7 +27,7 @@ export function paintCommands(result: TraceResult, opts: SvgOptions, postscript 
   const hidden = new Set(opts.hidden);
   const format = (value: number): string => formatNumber(value, opts.precision ?? 6);
   const commands: string[] = [];
-  const operators = postscript ? ['moveto', 'lineto', 'curveto', 'closepath', 'fill', 'setrgbcolor'] : ['m', 'l', 'c', 'h', 'f', 'rg'];
+  const operators = postscript ? ['moveto', 'lineto', 'curveto', 'closepath', 'fill', 'setrgbcolor'] as const : ['m', 'l', 'c', 'h', 'f', 'rg'] as const;
   for (const shape of result.shapes) {
     if (hidden.has(shape.id)) continue;
     const color = fillColor(result, shape, opts);

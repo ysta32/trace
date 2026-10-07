@@ -16,6 +16,11 @@ const result: TraceResult = {
   stats: { paths: 2, nodes: 11, colors: 2, ms: 1, preset: 'logo' },
 };
 
+function required<T>(value: T | null | undefined): T {
+  if (value === undefined || value === null) throw new Error('Expected a value to be present');
+  return value;
+}
+
 function pdfText(input = result): string { return new TextDecoder().decode(toPdf(input)); }
 
 describe('SVG export', () => {
@@ -26,7 +31,7 @@ describe('SVG export', () => {
     expect(svg).toContain('<stop offset="0.5" stop-color="#00ff00"/>');
     expect(svg.match(/<path /g)).toHaveLength(2);
     expect(svg.indexOf('fill="#ff0000"')).toBeLessThan(svg.indexOf('fill="url(#gradient)"'));
-    const d = /<path\b[^>]*\sd="([^"]+)"/.exec(svg)![1];
+    const d = required(/<path\b[^>]*\sd="([^"]+)"/.exec(svg)?.[1]);
     expect(parsePathData(d)[0]).toEqual({ command: 'M', x: 1.23, y: 2 });
     expect(toSvg(result, { precision: 3 })).toContain('1.234');
   });
@@ -37,10 +42,10 @@ describe('SVG export', () => {
     expect(svg).not.toContain('fill="#ff0000"');
   });
   it('escapes attribute values and preserves adjacent numeric tokens', () => {
-    const svg = toSvg({ ...result, shapes: [{ ...result.shapes[0], d: 'M.123.456L1e-3-2z' }] }, { overrides: { 7: '"/><script>' } });
+    const svg = toSvg({ ...result, shapes: [{ ...required(result.shapes[0]), d: 'M.123.456L1e-3-2z' }] }, { overrides: { 7: '"/><script>' } });
     expect(svg).not.toContain('<script>');
     expect(svg).toContain('&quot;/&gt;&lt;script&gt;');
-    expect(parsePathData(/<path\b[^>]*\sd="([^"]+)"/.exec(svg)![1])).toEqual([
+    expect(parsePathData(required(/<path\b[^>]*\sd="([^"]+)"/.exec(svg)?.[1]))).toEqual([
       { command: 'M', x: 0.12, y: 0.46 }, { command: 'L', x: 0, y: -2 }, { command: 'Z' },
     ]);
     expect(() => toSvg(result, { precision: -1 })).toThrow();
@@ -68,20 +73,20 @@ describe('path data', () => {
     const d = 'M0 0Q50 100 100 0Z M10 10C20 50 30 -50 40 10';
     const coarse = flattenPath(d, 2), fine = flattenPath(d, 0.1);
     expect(fine).toHaveLength(2);
-    expect(fine[0].closed).toBe(true);
-    expect(fine[1].closed).toBe(false);
-    expect(fine[0].points.length).toBeGreaterThan(coarse[0].points.length);
-    expect(fine[0].points.at(-1)).toEqual({ x: 100, y: 0 });
-    expect(fine[1].points.at(-1)).toEqual({ x: 40, y: 10 });
+    expect(required(fine[0]).closed).toBe(true);
+    expect(required(fine[1]).closed).toBe(false);
+    expect(required(fine[0]).points.length).toBeGreaterThan(required(coarse[0]).points.length);
+    expect(required(fine[0]).points.at(-1)).toEqual({ x: 100, y: 0 });
+    expect(required(fine[1]).points.at(-1)).toEqual({ x: 40, y: 10 });
     for (let step = 0; step <= 100; step++) {
       const t = step / 100, x = 100 * t, y = 200 * t * (1 - t);
-      const points = fine[0].points;
+      const points = required(fine[0]).points;
       const index = Math.max(1, points.findIndex(point => point.x >= x));
-      const a = points[index - 1], b = points[index];
+      const a = required(points[index - 1]), b = required(points[index]);
       const ratio = Math.max(0, Math.min(1, ((x - a.x) * (b.x - a.x) + (y - a.y) * (b.y - a.y)) / ((b.x - a.x) ** 2 + (b.y - a.y) ** 2)));
       expect(Math.hypot(x - a.x - ratio * (b.x - a.x), y - a.y - ratio * (b.y - a.y))).toBeLessThanOrEqual(0.1);
     }
-    expect(flattenPath('M0 0C100 0 -100 0 0 0', 0.1)[0].points.length).toBeGreaterThan(2);
+    expect(required(flattenPath('M0 0C100 0 -100 0 0 0', 0.1)[0]).points.length).toBeGreaterThan(2);
     expect(() => flattenPath(d, 0)).toThrow();
   });
 });
@@ -90,15 +95,15 @@ describe('PDF export', () => {
   it('writes byte-correct object offsets, startxref and stream length', () => {
     const bytes = toPdf(result), pdf = new TextDecoder().decode(bytes);
     expect(pdf.startsWith('%PDF-1.4\n')).toBe(true);
-    const xref = Number(/startxref\n(\d+)/.exec(pdf)![1]);
+    const xref = Number(required(/startxref\n(\d+)/.exec(pdf)?.[1]));
     expect(new TextDecoder().decode(bytes.slice(xref, xref + 4))).toBe('xref');
     const entries = pdf.slice(xref).split('\n').slice(3, 7);
     entries.forEach((entry, i) => {
       const offset = Number(entry.slice(0, 10));
       expect(new TextDecoder().decode(bytes.slice(offset)).startsWith(`${i + 1} 0 obj\n`)).toBe(true);
     });
-    const stream = /\/Length (\d+) >>\nstream\n([\s\S]*?)endstream/.exec(pdf)!;
-    expect(new TextEncoder().encode(stream[2]).length).toBe(Number(stream[1]));
+    const stream = required(/\/Length (\d+) >>\nstream\n([\s\S]*?)endstream/.exec(pdf));
+    expect(new TextEncoder().encode(required(stream[2])).length).toBe(Number(required(stream[1])));
     expect(pdf).toContain('/MediaBox [0 0 120 80]');
     expect(pdf).toContain('/Count 1');
     expect(pdf).toContain('1 0 0 -1 0 80 cm');
@@ -141,7 +146,7 @@ describe('DXF export', () => {
     expect(dxf).toContain('2\nCOLOR_FF0000\n');
     expect(dxf).toContain('2\nCOLOR_00FF00\n');
     expect(dxf).toContain('10\n1.2345\n20\n78\n');
-    const entities = dxf.split('2\nENTITIES\n')[1];
+    const entities = required(dxf.split('2\nENTITIES\n')[1]);
     expect(entities.match(/70\n1\n/g)).toHaveLength(3);
     expect(dxf).not.toContain('LWPOLYLINE');
   });
@@ -150,7 +155,7 @@ describe('DXF export', () => {
     expect(dxf.match(/0\nPOLYLINE\n/g)).toHaveLength(1);
     expect(dxf).toContain('COLOR_0000FF');
     expect(dxf).not.toContain('COLOR_FF0000');
-    const open = toDxf({ ...result, shapes: [{ ...result.shapes[0], d: 'M0 0L10 10L20 0' }] });
+    const open = toDxf({ ...result, shapes: [{ ...required(result.shapes[0]), d: 'M0 0L10 10L20 0' }] });
     expect(open).toContain('70\n1\n0\nVERTEX');
   });
 });

@@ -28,13 +28,13 @@ export function solidColor(result: TraceResult, fill: string): string {
   const reference = /^url\(#(.+)\)$/.exec(fill);
   if (!reference) return fill;
   const gradient = result.gradients.find(item => item.id === reference[1]);
-  if (!gradient || gradient.stops.length === 0) throw new Error(`Missing gradient stops: ${reference[1]}`);
-  return gradient.stops[Math.floor(gradient.stops.length / 2)].color;
+  const stop = gradient?.stops[Math.floor(gradient.stops.length / 2)];
+  if (!stop) throw new Error(`Missing gradient stops: ${reference[1]}`);
+  return stop.color;
 }
 
 export function rgb(color: string): [number, number, number] {
-  const short = /^#([\da-f])([\da-f])([\da-f])$/i.exec(color);
-  if (short) color = `#${short[1].repeat(2)}${short[2].repeat(2)}${short[3].repeat(2)}`;
+  if (/^#[\da-f]{3}$/i.test(color)) color = '#' + [...color.slice(1)].map(channel => channel.repeat(2)).join('');
   if (!/^#[\da-f]{6}$/i.test(color)) throw new Error(`Unsupported fill color: ${color}`);
   return [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16) / 255) as [number, number, number];
 }
