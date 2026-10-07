@@ -32,7 +32,8 @@ describe('SVG export', () => {
     expect(svg.match(/<path /g)).toHaveLength(2);
     expect(svg.indexOf('fill="#ff0000"')).toBeLessThan(svg.indexOf('fill="url(#gradient)"'));
     const d = required(/<path\b[^>]*\sd="([^"]+)"/.exec(svg)?.[1]);
-    expect(parsePathData(d)[0]).toEqual({ command: 'M', x: 1.23, y: 2 });
+    expect(d).toBe(required(result.shapes[0]).d);
+    expect(parsePathData(d)[0]).toEqual({ command: 'M', x: 1.2345, y: 2 });
     expect(toSvg(result, { precision: 3 })).toContain('1.234');
   });
   it('hides by stable ID and applies overrides', () => {
@@ -42,13 +43,35 @@ describe('SVG export', () => {
     expect(svg).not.toContain('fill="#ff0000"');
   });
   it('escapes attribute values and preserves adjacent numeric tokens', () => {
-    const svg = toSvg({ ...result, shapes: [{ ...required(result.shapes[0]), d: 'M.123.456L1e-3-2z' }] }, { overrides: { 7: '"/><script>' } });
+    const svg = toSvg({ ...result, shapes: [{ ...required(result.shapes[0]), d: 'M.123.456L1e-3-2z' }] }, { precision: 2, overrides: { 7: '"/><script>' } });
     expect(svg).not.toContain('<script>');
     expect(svg).toContain('&quot;/&gt;&lt;script&gt;');
     expect(parsePathData(required(/<path\b[^>]*\sd="([^"]+)"/.exec(svg)?.[1]))).toEqual([
       { command: 'M', x: 0.12, y: 0.46 }, { command: 'L', x: 0, y: -2 }, { command: 'Z' },
     ]);
     expect(() => toSvg(result, { precision: -1 })).toThrow();
+  });
+  it('passes path data through unchanged without explicit precision', () => {
+    const d = 'M10.5 3c-.2.4 .12345-.6789 1e-3-2z M1,2 L3 4';
+    const input = { ...result, shapes: [{ ...required(result.shapes[0]), d }] };
+    for (const opts of [{}, { precision: undefined }, { overrides: { 7: '#123456' } }]) {
+      const svg = toSvg(input, opts);
+      const exported = required(/<path\b[^>]*\sd="([^"]+)"/.exec(svg)?.[1]);
+      expect(exported).toBe(d);
+      expect(parsePathData(exported)).toEqual(parsePathData(d));
+    }
+  });
+  it.each([
+    ['M1.499.501L1.001-.499L.499.501L-.499-.501', 2, 'M1.5.5L1-.5L.5.5L-.5-.5'],
+    ['M.999.499L1.001-2.001L-.001.501', 2, 'M1 .5L1-2L0 .5'],
+    ['M.499.501L1.499-2.501', 0, 'M0 1L1-3'],
+    ['M1e-3-2L+3.456,+.789', 3, 'M.001-2L3.456.789'],
+  ])('compacts rounded tokens without changing their boundaries: %s', (d, precision, expected) => {
+    const svg = toSvg({ ...result, shapes: [{ ...required(result.shapes[0]), d }] }, { precision });
+    const exported = required(/<path\b[^>]*\sd="([^"]+)"/.exec(svg)?.[1]);
+    expect(exported).toBe(expected);
+    const rounded = d.replace(/[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/g, value => `${Number(Number(value).toFixed(precision))} `);
+    expect(parsePathData(exported)).toEqual(parsePathData(rounded));
   });
 });
 

@@ -47,10 +47,12 @@ export function toSvg(result: TraceResult, opts: SvgOptions = {}): string {
     '</linearGradient>',
   ).join('');
   const paths = visibleShapes(result, opts).map(shape => {
-    const d = shape.d
-      .replace(/[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/g, value => `${n(Number(value))} `)
+    const d = opts.precision === undefined ? shape.d : shape.d
+      .replace(/[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/g, value => `${n(Number(value)).replace(/^(-?)0\./, '$1.')} `)
       .replace(/[\s,]+/g, ' ')
       .replace(/\s*([a-zA-Z])\s*/g, '$1')
+      .replace(/ (?=-)/g, '')
+      .replace(/(\.\d+) (?=\.)/g, '$1')
       .trim();
     return `<path fill="${escapeAttribute(shape.fill)}" d="${escapeAttribute(d)}"/>`;
   }).join('');
