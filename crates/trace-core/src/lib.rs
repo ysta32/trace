@@ -1,6 +1,7 @@
 //! Trace core: raster -> vector. See CONTRACT.md.
 pub mod analyze; // T02
 pub mod decode; // T01
+pub mod fit;
 pub mod gradient;
 pub mod pipeline; // T01: analyze()+trace() orchestration
 pub mod preprocess; // T02

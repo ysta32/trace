@@ -1,17 +1,16 @@
-//! T01. Label map -> shapes (connected components + visioncortex path fitting).
+//! T01/T12. Label map -> shapes (connected components + contour fitting).
 //!
 //! Connected components are labelled here (u32 ids) rather than with
 //! `BinaryImage::to_clusters`, whose u16 cluster ids panic past 65535 clusters,
 //! and contours are followed directly on the label map (visioncortex's
 //! image-based walkers rescan each component's whole bounding box). The
-//! contours then go through visioncortex simplification/smoothing/spline fitting.
+//! contours then go through visioncortex simplification (Polygon mode) or the
+//! corner-aware cubic fitter in `fit` (Spline mode).
+use crate::fit::{fit_contour, FitParams};
 use crate::quantize::{Quantized, TRANSPARENT};
-use crate::svgpath::{format_path, Subpath};
+use crate::svgpath::{format_path_step, Subpath};
 use crate::types::{CurveMode, Mode};
-use visioncortex::{PathI32, PointI32, Spline};
-
-/// Outset ratio used by visioncortex/vtracer spline smoothing.
-const OUTSET_RATIO: f64 = 8.0;
+use visioncortex::{PathI32, PointI32};
 
 #[derive(Debug, Clone)]
 pub struct VecParams {
@@ -20,12 +19,17 @@ pub struct VecParams {
     pub corner_threshold_deg: f32,
     /// Segment length for spline smoothing, in working pixels.
     pub length_threshold: f32,
+    /// Legacy visioncortex spline parameters (unused by the cubic fitter).
     pub splice_threshold_deg: f32,
     pub max_iterations: u32,
     /// Clusters (and holes) with fewer working pixels than this are dropped.
     pub filter_speckle: u32,
     /// Output coordinates = working coordinates / scale (e.g. upscale factor).
     pub scale: f32,
+    /// Spline mode: maximum curve fitting error, in working pixels.
+    pub fit_tolerance: f32,
+    /// Output coordinate rounding step in hundredths (1 = 2 decimals, 10 = 1 decimal).
+    pub coord_step: u32,
 }
 
 impl Default for VecParams {
@@ -39,6 +43,8 @@ impl Default for VecParams {
             max_iterations: 10,
             filter_speckle: 4,
             scale: 1.0,
+            fit_tolerance: 0.8,
+            coord_step: 1,
         }
     }
 }
@@ -234,32 +240,26 @@ fn contour_to_subpath(pts: Vec<(i32, i32)>, outer: bool, off: (i32, i32), p: &Ve
                 .then(|| Subpath::Polygon(simp.path.iter().map(|q| (q.x as f64, q.y as f64)).collect()))
         }
         CurveMode::Spline => {
-            // Same steps as visioncortex Spline::from_image, on our own contour.
-            let simp = path.simplify(outer);
-            if simp.path.len() < 3 {
+            let wk = if p.scale.is_finite() && p.scale > 0.0 {
+                p.scale as f64
+            } else {
+                1.0
+            };
+            let fp = FitParams {
+                corner_deg: p.corner_threshold_deg as f64,
+                tol: (p.fit_tolerance as f64).max(0.05),
+                smooth_iters: (3.0 * wk).round().clamp(1.0, 12.0) as usize,
+                window: (2.0 * wk).round().clamp(3.0, 8.0) as usize,
+            };
+            let pts: Vec<(i32, i32)> = path.path.iter().map(|q| (q.x, q.y)).collect();
+            let (start, segs) = fit_contour(&pts, &fp)?;
+            if segs.iter().any(|s| match *s {
+                crate::svgpath::Seg::Line(a) => !(a.0.is_finite() && a.1.is_finite()),
+                crate::svgpath::Seg::Cubic(a, b, c) => ![a.0, a.1, b.0, b.1, c.0, c.1].iter().all(|v| v.is_finite()),
+            }) {
                 return None;
             }
-            let smooth = simp.smooth(
-                (p.corner_threshold_deg as f64).to_radians(),
-                OUTSET_RATIO,
-                p.length_threshold.max(0.5) as f64,
-                p.max_iterations.max(1) as usize,
-            );
-            if smooth.path.len() < 3 {
-                return None;
-            }
-            let spline = Spline::from_path_f64(&smooth, (p.splice_threshold_deg as f64).to_radians());
-            if spline.is_empty() || spline.points.iter().any(|q| !q.x.is_finite() || !q.y.is_finite()) {
-                return None;
-            }
-            let start = (spline.points[0].x, spline.points[0].y);
-            let segs = spline.points[1..]
-                .as_chunks::<3>()
-                .0
-                .iter()
-                .map(|c| [(c[0].x, c[0].y), (c[1].x, c[1].y), (c[2].x, c[2].y)])
-                .collect();
-            Some(Subpath::Cubic { start, segs })
+            Some(Subpath::Mixed { start, segs })
         }
     }
 }
@@ -287,7 +287,13 @@ fn trace_component(
         Some(sp) => out.push(sp),
         None => return out,
     }
-    let min_hole = p.filter_speckle.max(1) as u64;
+    // Stacked: a hole only reveals the (correct) lower layers, so smaller holes
+    // are kept; cutout holes must match the speckle filter to avoid gaps.
+    let min_hole = if p.mode == Mode::Stacked {
+        (p.filter_speckle / 16).max(1) as u64
+    } else {
+        p.filter_speckle.max(1) as u64
+    };
     for &i in pixels {
         let i = i as usize;
         let (x, y) = ((i % lw) as i32, (i / lw) as i32);
@@ -315,6 +321,10 @@ fn trace_component(
         }
     }
     out
+}
+
+fn p_step(p: &VecParams) -> i64 {
+    p.coord_step.clamp(1, 100) as i64
 }
 
 /// Traces each colour layer. Stacked: layers ordered by descending colour area,
@@ -394,7 +404,7 @@ pub fn vectorize(q: &Quantized, params: &VecParams) -> Vec<RawShape> {
             if subs.is_empty() {
                 continue;
             }
-            let (d, nodes) = format_path(&subs, mul);
+            let (d, nodes) = format_path_step(&subs, mul, p_step(params));
             if d.is_empty() {
                 continue;
             }

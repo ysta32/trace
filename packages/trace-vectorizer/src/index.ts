@@ -26,12 +26,16 @@ export async function trace(
   opts: TraceOptions = {},
 ): Promise<TraceResult> {
   const w = await init();
-  if (input instanceof Uint8Array) return w.trace(input, opts) as TraceResult;
-  if (isRawImage(input)) {
+  const t0 = performance.now();
+  let result: TraceResult;
+  if (input instanceof Uint8Array) result = w.trace(input, opts) as TraceResult;
+  else if (isRawImage(input)) {
     const { data, width, height } = input;
-    return w.trace_rgba(new Uint8Array(data.buffer, data.byteOffset, data.byteLength), width, height, opts) as TraceResult;
-  }
-  throw new TypeError('trace(): input must be Uint8Array, ImageData or {data, width, height}');
+    result = w.trace_rgba(new Uint8Array(data.buffer, data.byteOffset, data.byteLength), width, height, opts) as TraceResult;
+  } else throw new TypeError('trace(): input must be Uint8Array, ImageData or {data, width, height}');
+  // The wasm core has no clock (std::time panics on wasm32); time the call here.
+  if (!(result.stats.ms > 0)) result.stats.ms = Math.round((performance.now() - t0) * 10) / 10;
+  return result;
 }
 
 /** Trace raw RGBA pixels (e.g. from canvas getImageData). */

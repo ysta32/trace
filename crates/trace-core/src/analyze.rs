@@ -27,14 +27,19 @@ pub fn analyze(img: &RgbaImage) -> Analysis {
     let blend_frac = n_blend as f64 / n_opaque as f64;
     let distinct = distinct_colors(img, 4096);
     let max_dim = width.max(height);
-    let is_pixel_art = pixel_scale > 1 || (max_dim <= 128 && distinct <= 48 && blend_frac < 0.05);
+    // Unscaled pixel art is tiny; 65..128px flat icons with antialiasing are not.
+    let is_pixel_art = pixel_scale > 1 || (max_dim <= 64 && distinct <= 48 && blend_frac < 0.05);
     let grad_frac = gradient_fraction(&prep);
     let has_gradients = grad_frac > 0.12;
     let (bins, entropy) = bin_entropy(img);
 
     let preset = if is_pixel_art {
         Preset::Pixelart
-    } else if (bins >= 1024 && entropy >= 7.5) || (has_gradients && colors >= 24 && entropy >= 6.5) {
+    } else if (bins >= 1024 && entropy >= 7.5)
+        || (has_gradients && colors >= 24 && entropy >= 6.5)
+        // Continuous-tone content: thousands of distinct colours spread over many bins.
+        || (distinct > 4096 && bins >= 256 && entropy >= 5.0)
+    {
         Preset::Photo
     } else if colors <= 3 && is_line_art(&prep) {
         Preset::Lineart

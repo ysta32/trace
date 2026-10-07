@@ -1,6 +1,6 @@
-//! T01. Compact SVG path data formatting.
+//! T01/T12. Compact SVG path data formatting.
 //!
-//! Coordinates are rounded to 2 decimals and handled as integer hundredths so
+//! Coordinates are rounded to 2 decimals (or a coarser `step`) and handled as integer hundredths so
 //! relative commands never accumulate rounding drift. Each command is emitted
 //! in whichever of its absolute/relative forms is shorter.
 
@@ -14,6 +14,15 @@ pub enum Subpath {
         start: (f64, f64),
         segs: Vec<[(f64, f64); 3]>,
     },
+    /// Closed mixed path: start point followed by line / cubic segments.
+    Mixed { start: (f64, f64), segs: Vec<Seg> },
+}
+
+/// One segment of a [`Subpath::Mixed`] path (end point last).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Seg {
+    Line((f64, f64)),
+    Cubic((f64, f64), (f64, f64), (f64, f64)),
 }
 
 /// Formats `v` (in hundredths) as a compact decimal: no trailing zeros, no leading `0.`.
@@ -156,14 +165,26 @@ impl Writer {
     }
 }
 
-fn q(p: (f64, f64), mul: f64) -> (i64, i64) {
-    ((p.0 * mul * 100.0).round() as i64, (p.1 * mul * 100.0).round() as i64)
+type Pt = (i64, i64);
+
+/// Rounds to a multiple of `step` hundredths.
+fn qs(p: (f64, f64), mul: f64, step: i64) -> (i64, i64) {
+    let s = step.max(1) as f64;
+    let r = |v: f64| ((v * mul * 100.0 / s).round() * s) as i64;
+    (r(p.0), r(p.1))
 }
 
 /// Formats subpaths (coordinates multiplied by `mul`) as compact path data.
 /// Returns (d, node count). Degenerate subpaths (fewer than 3 distinct points
 /// after rounding) are skipped.
 pub fn format_path(subpaths: &[Subpath], mul: f64) -> (String, u32) {
+    format_path_step(subpaths, mul, 1)
+}
+
+/// [`format_path`] with coordinates rounded to multiples of `step` hundredths
+/// (1 = 2 decimals, 10 = 1 decimal, 100 = integers).
+pub fn format_path_step(subpaths: &[Subpath], mul: f64, step: i64) -> (String, u32) {
+    let q = |p: (f64, f64), mul: f64| qs(p, mul, step);
     let mut w = Writer::new();
     for sp in subpaths {
         match sp {
@@ -195,6 +216,43 @@ pub fn format_path(subpaths: &[Subpath], mul: f64) -> (String, u32) {
                 w.move_to(q(*start, mul));
                 for s in segs {
                     w.cubic_to(q(s[0], mul), q(s[1], mul), q(s[2], mul));
+                }
+                w.close();
+            }
+            Subpath::Mixed { start, segs } => {
+                // Drop segments that collapse to a point after rounding.
+                let s0 = q(*start, mul);
+                let mut out: Vec<(Option<(Pt, Pt)>, Pt)> = Vec::with_capacity(segs.len());
+                let mut cur = s0;
+                for s in segs {
+                    let (c, p) = match *s {
+                        Seg::Line(p) => (None, q(p, mul)),
+                        Seg::Cubic(c1, c2, p) => (Some((q(c1, mul), q(c2, mul))), q(p, mul)),
+                    };
+                    let degenerate = match c {
+                        None => p == cur,
+                        Some((c1, c2)) => p == cur && c1 == cur && c2 == cur,
+                    };
+                    if !degenerate {
+                        out.push((c, p));
+                        cur = p;
+                    }
+                }
+                // The closing segment back to the start is implicit when it is a line.
+                if let Some(&(None, p)) = out.last() {
+                    if p == s0 {
+                        out.pop();
+                    }
+                }
+                if out.len() < 2 {
+                    continue;
+                }
+                w.move_to(s0);
+                for (c, p) in out {
+                    match c {
+                        None => w.line_to(p),
+                        Some((c1, c2)) => w.cubic_to(c1, c2, p),
+                    }
                 }
                 w.close();
             }

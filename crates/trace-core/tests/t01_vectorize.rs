@@ -164,13 +164,20 @@ fn red_circle_on_white_spline() {
         );
         for s in &shapes {
             assert!(!s.d.is_empty() && s.nodes > 0);
-            assert!(
-                s.d.contains('C') || s.d.contains('c'),
-                "spline output should have cubics: {}",
-                s.d
-            );
         }
         let circ = shapes.iter().find(|s| s.color_index == 1).expect("circle shape");
+        // Curved outlines are cubics; straight edges (e.g. the stacked canvas
+        // rectangle) may legitimately be emitted as lines.
+        assert!(
+            circ.d.contains('C') || circ.d.contains('c'),
+            "spline output should have cubics: {}",
+            circ.d
+        );
+        assert!(
+            !circ.d.contains(['L', 'l', 'H', 'h', 'V', 'v']),
+            "circle should be all curves: {}",
+            circ.d
+        );
         assert_eq!(subpath_count(&circ.d), 1);
         assert!(circ.nodes >= 4 && circ.nodes < 40, "nodes {}", circ.nodes);
         if mode == Mode::Cutout {

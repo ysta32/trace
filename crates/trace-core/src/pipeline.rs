@@ -84,11 +84,13 @@ pub fn preset_defaults(p: Preset) -> PresetDefaults {
             simplify: 0.0,
             ..base
         },
+        // Bench-tuned (bench/RESULTS.md): ~10-16 well-separated colours with small
+        // speckles beat larger palettes on SSIM (fewer banding contours) and size.
         Preset::Photo => PresetDefaults {
-            colors: (16, 32),
+            colors: (10, 16),
             denoise: 0.5,
-            filter_speckle: 16,
-            simplify: 0.5,
+            filter_speckle: 4,
+            simplify: 0.4,
             gradients: true,
             ..base
         },
@@ -124,6 +126,26 @@ fn downscale_nearest(img: &RgbaImage, s: u32) -> RgbaImage {
         let sy = (y * s + s / 2).min(img.height() - 1);
         *img.get_pixel(sx, sy)
     })
+}
+
+/// simplify 0..1 -> maximum curve fitting error in original pixels.
+pub fn fit_tolerance_for_simplify(simplify: f32) -> f64 {
+    0.3 + 0.6 * simplify.clamp(0.0, 1.0) as f64
+}
+
+/// Opaque distinct colours of `img`, or None if there are more than `cap`.
+fn exact_palette(img: &RgbaImage, cap: usize) -> Option<Vec<[u8; 3]>> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for p in img.pixels() {
+        if p[3] >= 128 && seen.insert([p[0], p[1], p[2]]) {
+            out.push([p[0], p[1], p[2]]);
+            if out.len() > cap {
+                return None;
+            }
+        }
+    }
+    (!out.is_empty()).then_some(out)
 }
 
 /// Speckle side length in original pixels -> minimum cluster area in working
@@ -282,8 +304,14 @@ pub fn trace(img: &RgbaImage, opts: &TraceOptions) -> TraceResult {
         .flatten()
         .filter_map(|s| parse_hex_color(s))
         .collect();
+    // Pixel art with few colours keeps its exact palette (no k-means merging).
+    let exact = (pixel_art && forced.is_empty() && opts.colors.is_none())
+        .then(|| exact_palette(&work, def.colors.1 as usize))
+        .flatten();
     let q = if !forced.is_empty() {
         quantize(&work, Some(forced.len() as u32), Some(&forced))
+    } else if let Some(pal) = exact {
+        quantize(&work, Some(pal.len() as u32), Some(&pal))
     } else {
         let k = match &opts.colors {
             Some(AutoOr::Value(n)) => (*n).clamp(1, 64),
@@ -314,6 +342,9 @@ pub fn trace(img: &RgbaImage, opts: &TraceOptions) -> TraceResult {
         max_iterations: 10,
         filter_speckle: speckle_area,
         scale: divisor as f32,
+        fit_tolerance: (fit_tolerance_for_simplify(simplify) * divisor) as f32,
+        // 0.1px output precision is invisible on images of a few hundred px and up.
+        coord_step: if ow.max(oh) >= 128 { 10 } else { 1 },
     };
     let raw = vectorize(&q, &params);
 

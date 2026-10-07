@@ -436,6 +436,19 @@ fn merge_close(mut centers: Vec<Lab>, mut sizes: Vec<f32>, thr: f32) -> Vec<Lab>
 
 /// Incremental k-means: grow k until the marginal error reduction is small,
 /// the new cluster is tiny (<0.3%), or the fit is essentially exact.
+/// Weight fraction of points farther than a clearly visible colour difference
+/// from every centre (small but distinct regions, e.g. a red dot on orange).
+fn far_fraction(pts: &[Lab], wts: &[f32], centers: &[Lab], total: f32) -> f32 {
+    const FAR2: f32 = 0.08 * 0.08;
+    let far: f32 = pts
+        .iter()
+        .zip(wts)
+        .filter(|(p, _)| nearest(**p, centers).1 > FAR2)
+        .map(|(_, &w)| w)
+        .sum();
+    far / total.max(1e-9)
+}
+
 fn auto_palette(pts: &[Lab], wts: &[f32]) -> Vec<Lab> {
     if pts.is_empty() {
         return Vec::new();
@@ -444,7 +457,7 @@ fn auto_palette(pts: &[Lab], wts: &[f32]) -> Vec<Lab> {
     let mut rng = XorShift(0x9E37_79B9_7F4A_7C15);
     let mut best = vec![heaviest(pts, wts)];
     let (mut err, mut best_sizes) = lloyd(pts, wts, &mut best, 4);
-    while best.len() < 64 && best.len() < pts.len() && err > 0.006 {
+    while best.len() < 64 && best.len() < pts.len() && (err > 0.006 || far_fraction(pts, wts, &best, total) > 0.004) {
         let k = best.len();
         let step = (if k < 16 { 1 } else { 4 }).min(64 - k).min(pts.len() - k);
         let mut c = best.clone();
