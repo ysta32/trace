@@ -1,7 +1,7 @@
 //! T02 analysis / classification tests.
 use image::{imageops, Rgba, RgbaImage};
 use trace_core::analyze::detect_pixel_scale;
-use trace_core::preprocess::{denoise, limit_size, upscale};
+use trace_core::preprocess::{denoise, effective_upscale_factor, limit_size, upscale, MAX_UPSCALE_PIXELS};
 use trace_core::{analyze, Preset};
 
 fn render(w: u32, h: u32, f: impl Fn(f32, f32) -> [u8; 3]) -> RgbaImage {
@@ -125,6 +125,16 @@ fn preprocess_basics() {
     let up = upscale(&img, 2, false);
     assert_eq!(up.dimensions(), (128, 128));
     assert_eq!(upscale(&img, 1, false), img);
+    // Oversize requests are clamped instead of allocating > 64 MP.
+    assert_eq!(effective_upscale_factor(16384, 4096, 4), 1);
+    assert_eq!(effective_upscale_factor(4096, 4096, 4), 2);
+    assert_eq!(effective_upscale_factor(1024, 1024, 4), 4);
+    assert_eq!(effective_upscale_factor(u32::MAX, 2, 4), 1);
+    assert_eq!(effective_upscale_factor(10, 10, 0), 1);
+    for (w, h, f) in [(16384u32, 4096u32, 4u32), (5000, 3000, 4), (3000, 3000, 3)] {
+        let e = effective_upscale_factor(w, h, f) as u64;
+        assert!(e >= 1 && (e == 1 || (w as u64 * e) * (h as u64 * e) <= MAX_UPSCALE_PIXELS));
+    }
     let near = upscale(&img, 4, true);
     assert_eq!(near.get_pixel(13, 9), img.get_pixel(3, 2));
     assert_eq!(limit_size(&img, 100), img);

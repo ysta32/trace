@@ -67,18 +67,36 @@ pub fn denoise(img: &RgbaImage, strength: f32) -> RgbaImage {
     out
 }
 
+/// Maximum number of output pixels `upscale` will produce (64 MP = 256 MiB RGBA).
+pub const MAX_UPSCALE_PIXELS: u64 = 64 * 1024 * 1024;
+
+/// Largest factor <= `factor` (and >= 1) such that the upscaled image has at
+/// most [`MAX_UPSCALE_PIXELS`] pixels and dimensions that fit in u32.
+pub fn effective_upscale_factor(w: u32, h: u32, factor: u32) -> u32 {
+    let mut f = factor.max(1);
+    while f > 1 {
+        let (fw, fh) = (w as u64 * f as u64, h as u64 * f as u64);
+        if fw <= u32::MAX as u64 && fh <= u32::MAX as u64 && fw * fh <= MAX_UPSCALE_PIXELS {
+            break;
+        }
+        f -= 1;
+    }
+    f
+}
+
 /// factor in {1,2,4}; `nearest` for pixel art, smooth edge-aware otherwise.
+/// The factor is reduced (down to 1 = clone) so the output stays within
+/// [`MAX_UPSCALE_PIXELS`]; see [`effective_upscale_factor`].
 ///
 /// Smooth path: Catmull-Rom bicubic followed by a mild unsharp mask (colour
 /// only; alpha comes from the bicubic result) to keep edges crisp.
 pub fn upscale(img: &RgbaImage, factor: u32, nearest: bool) -> RgbaImage {
     let (w, h) = img.dimensions();
+    let factor = effective_upscale_factor(w, h, factor);
     if factor <= 1 || w == 0 || h == 0 {
         return img.clone();
     }
-    let (Some(nw), Some(nh)) = (w.checked_mul(factor), h.checked_mul(factor)) else {
-        return img.clone();
-    };
+    let (nw, nh) = (w * factor, h * factor);
     if nearest {
         return RgbaImage::from_fn(nw, nh, |x, y| *img.get_pixel(x / factor, y / factor));
     }
