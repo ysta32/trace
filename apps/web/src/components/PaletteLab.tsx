@@ -9,7 +9,10 @@ import {
   lockedColors, paletteEdits, mergedColors, paletteUndo,
   beginRecolor, recolor, mergeColors, toggleLock, resetPalette, undoPaletteEdit,
 } from '../editorState';
-import { computeCoverage, formatShare, normalizeHex, type ColorCoverage } from '../palette';
+import {
+  coverageSteps, foldCoverage, formatShare, normalizeHex, type ColorCoverage, type RawCoverage,
+} from '../palette';
+import type { TraceResult } from 'trace-vectorizer';
 import { Icon } from '../design/icons';
 import '../editor-extras.css';
 
@@ -29,6 +32,51 @@ function pickedHex(value: string): string | null {
   return `#${[m[1], m[2], m[3]].map((v) => Math.min(255, Number(v)).toString(16).padStart(2, '0')).join('')}`;
 }
 
+// Coverage depends only on the result geometry + hidden set, never on recolors or merges
+// (those are folded in cheaply), so cache it per result and compute it in idle slices.
+const COVERAGE_SLICE_MS = 8;
+const coverageCache = new WeakMap<TraceResult, { hidden: ReadonlySet<number>; raw: RawCoverage }>();
+
+function useRawCoverage(r: TraceResult | null, hid: ReadonlySet<number>): RawCoverage | null {
+  const cached = r ? coverageCache.get(r) : undefined;
+  const hit = cached && cached.hidden === hid ? cached.raw : null;
+  const [, bump] = useState(0);
+  useEffect(() => {
+    if (!r || hit) return;
+    const it = coverageSteps(r, hid);
+    let handle = 0;
+    let cancelled = false;
+    const schedule = (fn: () => void) =>
+      typeof requestIdleCallback === 'function'
+        ? requestIdleCallback(fn, { timeout: 200 })
+        : (setTimeout(fn, 0) as unknown as number);
+    const step = () => {
+      if (cancelled) return;
+      const t0 = performance.now();
+      while (performance.now() - t0 < COVERAGE_SLICE_MS) {
+        const res = it.next();
+        if (res.done) {
+          coverageCache.set(r, { hidden: hid, raw: res.value });
+          bump((n) => n + 1);
+          return;
+        }
+      }
+      handle = schedule(step);
+    };
+    handle = schedule(step);
+    return () => {
+      cancelled = true;
+      if (typeof cancelIdleCallback === 'function') cancelIdleCallback(handle);
+      else clearTimeout(handle);
+    };
+  }, [r, hid, hit]);
+  return hit;
+}
+
+const EMPTY_RAW: RawCoverage = {
+  area: new Float64Array(0), shapes: new Uint32Array(0), total: 0, unmeasured: 0, grid: { width: 0, height: 0 },
+};
+
 export function PaletteLab() {
   const r = result.value;
   const hid = hidden.value;
@@ -37,9 +85,11 @@ export function PaletteLab() {
   const locked = lockedColors.value;
   const canUndo = paletteUndo.value.length > 0;
 
+  const raw = useRawCoverage(r, hid);
+  const measuring = !!r && !raw;
   const report = useMemo(
-    () => (r ? computeCoverage(r, { hidden: hid, merged, edits }) : null),
-    [r, hid, merged, edits],
+    () => (r ? foldCoverage(r, raw ?? EMPTY_RAW, merged, edits) : null),
+    [r, raw, merged, edits],
   );
   const colors = report?.colors ?? [];
 
@@ -179,7 +229,7 @@ export function PaletteLab() {
               style={{ '--tx-swatch': c.hex }}
               tabIndex={pos === focusPos ? 0 : -1}
               draggable
-              aria-label={`Color ${c.hex}, ${formatShare(c.share)} coverage, ${c.shapes} shapes${isLocked(c) ? ', locked' : ''}`}
+              aria-label={`Color ${c.hex}, ${measuring ? 'measuring coverage' : `${formatShare(c.share)} coverage, ${c.shapes} shapes`}${isLocked(c) ? ', locked' : ''}`}
               aria-haspopup="dialog"
               aria-expanded={editing === c.index}
               aria-pressed={mergeFrom === c.index ? true : undefined}
@@ -199,7 +249,9 @@ export function PaletteLab() {
               }}
               onDragEnd={() => { setDragFrom(null); setDropOn(null); }}
             />
-            <span class="tx-pl-cov t-num">{formatShare(c.share)}</span>
+            {measuring
+              ? <span class="tx-pl-cov skeleton tx-pl-skel-text" aria-hidden="true" />
+              : <span class="tx-pl-cov t-num">{formatShare(c.share)}</span>}
           </div>
         ))}
       </div>
@@ -209,7 +261,7 @@ export function PaletteLab() {
           <span class="tx-pl-chip" style={{ '--tx-swatch': focused.hex }} aria-hidden="true" />
           <span class="tx-pl-hex t-num">{focused.hex}</span>
           <span class="tx-pl-meta t-num">
-            {formatShare(focused.share)} · {focused.shapes} shapes
+            {measuring ? 'Measuring coverage' : `${formatShare(focused.share)} · ${focused.shapes} shapes`}
             {focused.mergedFrom.length > 0 && ` · ${focused.mergedFrom.length} merged`}
           </span>
           <button
@@ -230,6 +282,7 @@ export function PaletteLab() {
           key={editing}
           index={editing}
           colors={colors}
+          measuring={measuring}
           anchor={swatchRefs.current[posOf(editing)] ?? null}
           container={rootRef.current}
           locked={locked.has(colors[posOf(editing)]!.hex)}
@@ -282,6 +335,7 @@ function Header({ count, onReset }: { count: number | null; onReset?: () => void
 function ColorPopover(props: {
   index: number;
   colors: ColorCoverage[];
+  measuring: boolean;
   anchor: HTMLElement | null;
   container: HTMLElement | null;
   locked: boolean;
@@ -289,9 +343,17 @@ function ColorPopover(props: {
   onMerge: (to: number) => void;
   onError: (text: string) => void;
 }) {
-  const { index, colors, anchor, container, locked, onClose, onMerge, onError } = props;
+  const { index, colors, measuring, anchor, container, locked, onClose, onMerge, onError } = props;
   const current = colors.find((c) => c.index === index);
-  const session = useRef(beginRecolor(index));
+  const [initialSession] = useState(() => beginRecolor(index)); // snapshot once, not per render
+  const session = useRef(initialSession);
+  // Native picker fires `input` per pointer move: coalesce to one recolor per frame.
+  const frame = useRef<{ raf: number; hex: string | null }>({ raf: 0, hex: null });
+  useEffect(() => () => {
+    const f = frame.current;
+    if (f.raf) cancelAnimationFrame(f.raf);
+    if (f.hex) recolor(index, f.hex, session.current, false); // flush the last pending frame on close
+  }, []);
   const [draft, setDraftState] = useState(current?.hex ?? '');
   const draftRef = useRef(draft);
   const setDraft = (v: string) => { draftRef.current = v; setDraftState(v); };
@@ -332,7 +394,22 @@ function ColorPopover(props: {
     if (!h) { setInvalid(true); return; }
     setInvalid(false);
     setDraft(h);
-    recolor(index, h, session.current, commit);
+    const f = frame.current;
+    if (commit) {
+      if (f.raf) cancelAnimationFrame(f.raf);
+      f.raf = 0; f.hex = null;
+      recolor(index, h, session.current, true);
+      return;
+    }
+    f.hex = h;
+    if (!f.raf) {
+      f.raf = requestAnimationFrame(() => {
+        f.raf = 0;
+        const next = f.hex;
+        f.hex = null;
+        if (next) recolor(index, next, session.current, false);
+      });
+    }
   };
 
   const sample = async () => {
@@ -411,7 +488,7 @@ function ColorPopover(props: {
             }}
           >
             <option value="" disabled>Choose color</option>
-            {others.map((c) => <option key={c.index} value={String(c.index)}>{c.hex} · {formatShare(c.share)}</option>)}
+            {others.map((c) => <option key={c.index} value={String(c.index)}>{measuring ? c.hex : `${c.hex} · ${formatShare(c.share)}`}</option>)}
           </select>
         </label>
       )}

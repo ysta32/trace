@@ -96,31 +96,42 @@ export function forcedPalette(
 
 interface Edge { x0: number; y0: number; x1: number; y1: number; dir: number }
 
+/** Color-independent coverage of one result + hidden set, by original palette index. */
+export interface RawCoverage {
+  area: Float64Array;       // samples where palette index i is top-most
+  shapes: Uint32Array;      // visible shapes per palette index
+  total: number;            // grid samples
+  unmeasured: number;
+  grid: { width: number; height: number };
+}
+
 /**
- * Coverage per palette color: rasterize visible shapes back-to-front on a grid (long side
- * `grid` samples) with the nonzero rule SVG uses by default; the top-most paint wins.
+ * Rasterize visible shapes back-to-front on a grid (long side `grid` samples) with the nonzero
+ * rule SVG uses by default; the top-most paint wins. Yields after each shape so callers can
+ * slice the work (progress 0..1). Independent of recolors and merges: fold those afterwards.
  */
-export function computeCoverage(
+export function* coverageSteps(
   result: TraceResult,
-  opts: { hidden?: ReadonlySet<number>; merged?: MergeMap; edits?: Readonly<Record<number, string>>; grid?: number } = {},
-): CoverageReport {
-  const merged = opts.merged ?? {};
-  const edits = opts.edits ?? {};
-  const hidden = opts.hidden ?? new Set<number>();
+  hidden: ReadonlySet<number> = new Set(),
+  grid = 160,
+): Generator<number, RawCoverage, void> {
   const { width, height } = result;
-  const scale = width > 0 && height > 0 ? Math.min(1, (opts.grid ?? 160) / Math.max(width, height)) : 0;
+  const scale = width > 0 && height > 0 ? Math.min(1, grid / Math.max(width, height)) : 0;
   const gw = Math.max(1, Math.round(width * scale));
   const gh = Math.max(1, Math.round(height * scale));
   const sx = gw / Math.max(width, 1e-9), sy = gh / Math.max(height, 1e-9);
+  const n = result.palette.length;
   const labels = new Int32Array(gw * gh).fill(-1);
-  const shapeCount = new Map<number, number>();
+  const shapes = new Uint32Array(n);
   let unmeasured = 0;
   const tolerance = Math.max(0.25, 0.5 / Math.max(sx, 1e-9));
+  const xs: { x: number; dir: number }[] = [];
 
-  for (const shape of result.shapes) {
+  for (let si = 0; si < result.shapes.length; si++) {
+    const shape = result.shapes[si]!;
     if (hidden.has(shape.id)) continue;
-    const label = shape.colorIndex >= 0 ? resolveMerge(merged, shape.colorIndex) : -2; // -2: gradient, still occludes
-    if (label >= 0) shapeCount.set(label, (shapeCount.get(label) ?? 0) + 1);
+    const label = shape.colorIndex >= 0 && shape.colorIndex < n ? shape.colorIndex : -2; // -2: gradient, still occludes
+    if (label >= 0) shapes[label]!++;
     let polylines;
     try {
       polylines = flattenPath(shape.d, tolerance);
@@ -143,49 +154,78 @@ export function computeCoverage(
         maxY = Math.max(maxY, ay, by);
       }
     }
-    if (!edges.length) continue;
-    const r0 = Math.max(0, Math.floor(minY - 0.5)), r1 = Math.min(gh - 1, Math.ceil(maxY));
-    const xs: { x: number; dir: number }[] = [];
-    for (let row = r0; row <= r1; row++) {
-      const yc = row + 0.5;
-      xs.length = 0;
-      for (const e of edges) {
-        if (yc >= e.y0 && yc < e.y1) xs.push({ x: e.x0 + ((yc - e.y0) / (e.y1 - e.y0)) * (e.x1 - e.x0), dir: e.dir });
-      }
-      if (xs.length < 2) continue;
-      xs.sort((p, q) => p.x - q.x);
-      let wind = 0;
-      for (let k = 0; k < xs.length - 1; k++) {
-        wind += xs[k]!.dir;
-        if (wind === 0) continue;
-        const c0 = Math.max(0, Math.ceil(xs[k]!.x - 0.5));
-        const c1 = Math.min(gw, Math.ceil(xs[k + 1]!.x - 0.5));
-        const base = row * gw;
-        for (let c = c0; c < c1; c++) labels[base + c] = label;
+    if (edges.length) {
+      const r0 = Math.max(0, Math.floor(minY - 0.5)), r1 = Math.min(gh - 1, Math.ceil(maxY));
+      for (let row = r0; row <= r1; row++) {
+        const yc = row + 0.5;
+        xs.length = 0;
+        for (const e of edges) {
+          if (yc >= e.y0 && yc < e.y1) xs.push({ x: e.x0 + ((yc - e.y0) / (e.y1 - e.y0)) * (e.x1 - e.x0), dir: e.dir });
+        }
+        if (xs.length < 2) continue;
+        xs.sort((p, q) => p.x - q.x);
+        let wind = 0;
+        for (let k = 0; k < xs.length - 1; k++) {
+          wind += xs[k]!.dir;
+          if (wind === 0) continue;
+          const c0 = Math.max(0, Math.ceil(xs[k]!.x - 0.5));
+          const c1 = Math.min(gw, Math.ceil(xs[k + 1]!.x - 0.5));
+          const base = row * gw;
+          for (let c = c0; c < c1; c++) labels[base + c] = label;
+        }
       }
     }
+    yield (si + 1) / result.shapes.length;
   }
 
-  const area = new Map<number, number>();
+  const area = new Float64Array(n);
   for (let i = 0; i < labels.length; i++) {
     const l = labels[i]!;
-    if (l >= 0) area.set(l, (area.get(l) ?? 0) + 1);
+    if (l >= 0) area[l]!++;
   }
-  const total = gw * gh;
+  return { area, shapes, total: gw * gh, unmeasured, grid: { width: gw, height: gh } };
+}
+
+/** Cheap: apply merges (relabel) and recolors (hex) to a raw coverage. */
+export function foldCoverage(
+  result: TraceResult,
+  raw: RawCoverage,
+  merged: MergeMap = {},
+  edits: Readonly<Record<number, string>> = {},
+): CoverageReport {
+  const n = result.palette.length;
+  const area = new Float64Array(n), shapes = new Float64Array(n);
+  const from: number[][] = Array.from({ length: n }, () => []);
+  for (let i = 0; i < n; i++) {
+    const t = resolveMerge(merged, i);
+    area[t]! += raw.area[i] ?? 0;
+    shapes[t]! += raw.shapes[i] ?? 0;
+    if (t !== i) from[t]!.push(i);
+  }
   const colors: ColorCoverage[] = [];
-  for (let i = 0; i < result.palette.length; i++) {
+  for (let i = 0; i < n; i++) {
     if (resolveMerge(merged, i) !== i) continue;
-    const mergedFrom: number[] = [];
-    for (let j = 0; j < result.palette.length; j++) if (j !== i && resolveMerge(merged, j) === i) mergedFrom.push(j);
     colors.push({
       index: i,
       hex: effectiveHex(result.palette, edits, i),
-      shapes: shapeCount.get(i) ?? 0,
-      share: (area.get(i) ?? 0) / total,
-      mergedFrom,
+      shapes: shapes[i]!,
+      share: raw.total ? area[i]! / raw.total : 0,
+      mergedFrom: from[i]!,
     });
   }
-  return { colors, unmeasured, grid: { width: gw, height: gh } };
+  return { colors, unmeasured: raw.unmeasured, grid: raw.grid };
+}
+
+/** Synchronous convenience (tests, small results): coverageSteps run to completion + fold. */
+export function computeCoverage(
+  result: TraceResult,
+  opts: { hidden?: ReadonlySet<number>; merged?: MergeMap; edits?: Readonly<Record<number, string>>; grid?: number } = {},
+): CoverageReport {
+  const it = coverageSteps(result, opts.hidden, opts.grid);
+  for (;;) {
+    const s = it.next();
+    if (s.done) return foldCoverage(result, s.value, opts.merged, opts.edits);
+  }
 }
 
 /** "34.2 %" / "0.4 %" / "<0.1 %" — tabular, unit after a thin space per README. */

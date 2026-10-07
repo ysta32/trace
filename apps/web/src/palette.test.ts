@@ -110,3 +110,101 @@ describe('formatting', () => {
     expect(formatShare(0.0004)).toBe('<0.1 %');
   });
 });
+
+// ---- Palette undo across re-traces (editorState + store, tracer simulated) ----
+import { beforeEach } from 'vitest';
+import { result, opts, overrides, setResult, resetOpts } from './store';
+import {
+  lockedColors, mergedColors, paletteEdits, paletteUndo,
+  beginRecolor, recolor, mergeColors, toggleLock, resetPalette, undoPaletteEdit,
+} from './editorState';
+
+/** What the tracer would return for the current opts: forced palette when pinned, auto otherwise. */
+function retrace(): TraceResult {
+  const r = fixture();
+  const forced = opts.value.palette;
+  if (forced) {
+    const map = r.palette.map((h) => forced.indexOf(h));
+    r.palette = [...forced];
+    for (const s of r.shapes) if (map[s.colorIndex]! >= 0) { s.colorIndex = map[s.colorIndex]!; s.fill = forced[s.colorIndex]!; }
+  }
+  setResult(r);
+  return r;
+}
+const flush = () => Promise.resolve();
+
+describe('palette undo', () => {
+  beforeEach(() => {
+    resetOpts();
+    lockedColors.value = new Set();
+    setResult(null);
+    setResult(fixture());
+  });
+
+  it('restores overrides on the same result (merge → reset → undo → undo)', () => {
+    mergeColors(2, 1);
+    expect(overrides.value).toEqual({ 2: '#ff0000', 4: '#ff0000' });
+    resetPalette();
+    expect(overrides.value).toEqual({});
+    expect(undoPaletteEdit()).toBe('Reset palette');
+    expect(overrides.value).toEqual({ 2: '#ff0000', 4: '#ff0000' });
+    expect(mergedColors.value).toEqual({ 2: 1 });
+    expect(undoPaletteEdit()).toMatch(/^Merge/);
+    expect(overrides.value).toEqual({});
+    expect(undoPaletteEdit()).toBeNull();
+  });
+
+  it('a lock-triggered re-trace keeps the stack; undo restores locks + palette option and replays merges by hex', async () => {
+    mergeColors(2, 1);
+    toggleLock(0);
+    expect(opts.value.palette).toEqual(['#ffffff', '#ff0000']);
+    retrace();
+    await flush();
+    expect(paletteUndo.value.map((s) => s.label)).toEqual(['Merge #0000ff into #ff0000', 'Lock #ffffff']);
+
+    expect(undoPaletteEdit()).toBe('Lock #ffffff');
+    expect(lockedColors.value.size).toBe(0);
+    expect(opts.value.palette).toBeUndefined();
+    const r3 = retrace();                       // auto palette again: blue is back as its own index
+    await flush();
+    expect(result.value).toBe(r3);
+    expect(mergedColors.value).toEqual({ 2: 1 });
+    expect(overrides.value).toEqual({ 2: '#ff0000', 4: '#ff0000' });
+    expect(paletteUndo.value).toHaveLength(1);
+
+    expect(undoPaletteEdit()).toMatch(/^Merge/); // different result, same option: replayed in place
+    expect(mergedColors.value).toEqual({});
+    expect(overrides.value).toEqual({});
+  });
+
+  it('recolor of a locked color re-pins; undo restores the old lock and palette atomically', async () => {
+    toggleLock(1);
+    retrace();
+    await flush();
+    const idx = result.value!.palette.indexOf('#ff0000');
+    const session = beginRecolor(idx);
+    recolor(idx, '#00ff00', session, false);
+    recolor(idx, '#00ff00', session, true);
+    expect([...lockedColors.value]).toEqual(['#00ff00']);
+    expect(opts.value.palette![0]).toBe('#00ff00');
+    retrace();
+    await flush();
+    expect(paletteUndo.value).toHaveLength(2);
+
+    undoPaletteEdit();
+    expect([...lockedColors.value]).toEqual(['#ff0000']);
+    expect(opts.value.palette![0]).toBe('#ff0000');
+    retrace();
+    await flush();
+    expect(paletteEdits.value).toEqual({});
+    expect(paletteUndo.value).toHaveLength(1);
+  });
+
+  it('a re-trace we did not cause clears the stack', () => {
+    mergeColors(2, 1);
+    opts.value = { ...opts.value, denoise: 0.9 };
+    retrace();
+    expect(paletteUndo.value).toHaveLength(0);
+    expect(mergedColors.value).toEqual({});
+  });
+});
