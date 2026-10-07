@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>Trace</title>
+  <rect width="64" height="64" rx="16" fill="#145f42"/>
+  <path d="M16 18h32M32 18v30" stroke="#e9f3ed" stroke-width="7" stroke-linecap="round"/>
+  <path d="M15 43c7 0 8-12 17-12s10 12 17 12" stroke="#9ce2b6" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="15" cy="43" r="4" fill="#9ce2b6"/>
+  <circle cx="49" cy="43" r="4" fill="#9ce2b6"/>
+</svg>

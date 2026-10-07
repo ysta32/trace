@@ -1,0 +1,10 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/png-to-svg", "destination": "/pages/png-to-svg.html" },
+    { "source": "/free-logo-vectorizer", "destination": "/pages/free-logo-vectorizer.html" },
+    { "source": "/vectorizer-ai-alternative", "destination": "/pages/vectorizer-ai-alternative.html" },
+    { "source": "/jpg-to-svg", "destination": "/pages/jpg-to-svg.html" },
+    { "source": "/image-to-svg-converter", "destination": "/pages/image-to-svg-converter.html" }
+  ]
+}

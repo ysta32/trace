@@ -1,0 +1,45 @@
+{
+  "name": "trace-vectorizer",
+  "version": "0.1.0",
+  "description": "Convert PNG/JPG images to clean, layered SVG (and PDF, EPS, DXF) in the browser or Node. Rust + WebAssembly raster-to-vector tracer; images never leave your machine.",
+  "keywords": ["svg", "vectorize", "png-to-svg", "tracing", "vectorizer", "potrace", "vtracer", "wasm"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ysta32/trace.git",
+    "directory": "packages/trace-vectorizer"
+  },
+  "homepage": "https://trace-vectorizer.vercel.app",
+  "bugs": { "url": "https://github.com/ysta32/trace/issues" },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "tracevec": "bin/tracevec.js",
+    "trace-vectorizer": "bin/tracevec.js"
+  },
+  "files": ["dist", "wasm", "bin", "README.md"],
+  "engines": { "node": ">=18" },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run build"
+  },
+  "optionalDependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

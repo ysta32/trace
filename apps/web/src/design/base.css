@@ -1,0 +1,271 @@
+/* PLOTTER base layer. Import after tokens.css. Keep this file small:
+   component styles live with components, not here. */
+
+/* ---- Reset ---- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+* {
+  margin: 0;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  tab-size: 2;
+}
+body {
+  min-height: 100dvh;
+  background: var(--bg-app);
+  color: var(--fg-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  font-feature-settings: "ss01", "cv11";
+}
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+button {
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+button:disabled {
+  cursor: default;
+}
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  overflow-wrap: break-word;
+}
+h1,
+h2,
+h3,
+h4 {
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+hr {
+  border: 0;
+  border-top: 1px solid var(--border-hairline);
+}
+[hidden] {
+  display: none !important;
+}
+
+/* ---- Numbers are instruments: always tabular ---- */
+input[type="number"],
+output,
+.t-num {
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+/* ---- Selection ---- */
+::selection {
+  background: var(--selection-bg);
+  color: inherit;
+}
+
+/* ---- Focus: visible only for keyboard; 2px signal ring with gap ---- */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--radius-xs);
+}
+/* inside dense toolbars the offset would collide; components may opt in */
+.focus-inset:focus-visible {
+  outline-offset: calc(var(--focus-width) * -1);
+}
+
+/* ---- Scrollbars: thin, warm, invisible until needed ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-default);
+  border: 3px solid transparent;
+  border-radius: var(--radius-full);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--border-strong);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ---- kbd: machined keycap ---- */
+kbd,
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  color: var(--fg-secondary);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  white-space: nowrap;
+}
+
+code,
+pre,
+samp {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+/* ---- Skeleton: subtle sweep, not a pulse ---- */
+@keyframes plotter-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+@keyframes plotter-draw {
+  from {
+    stroke-dashoffset: var(--path-len, 1000);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes plotter-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.skeleton {
+  display: block;
+  border-radius: var(--radius-xs);
+  background: linear-gradient(
+      90deg,
+      var(--skeleton-base) 0%,
+      var(--skeleton-base) 40%,
+      var(--skeleton-shine) 50%,
+      var(--skeleton-base) 60%,
+      var(--skeleton-base) 100%
+    )
+    0 0 / 200% 100%;
+  animation: plotter-shimmer 1.4s var(--ease-linear) infinite;
+  color: transparent;
+  user-select: none;
+}
+
+/* ---- Minimal utilities (resist adding more) ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.t-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0;
+}
+/* Spec-sheet label: tiny mono caps, the system's signature */
+.t-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-regular);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--fg-tertiary);
+}
+.t-display {
+  font-family: var(--font-display);
+  font-weight: var(--weight-regular);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+}
+.canvas-checker {
+  background-color: var(--canvas-check-b);
+  background-image: conic-gradient(
+    var(--canvas-check-a) 25%,
+    transparent 0 50%,
+    var(--canvas-check-a) 0 75%,
+    transparent 0
+  );
+  background-size: 16px 16px;
+}
+
+/* ---- Reduced motion: kill decorative animation outright ---- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton {
+    animation: none;
+    background: var(--skeleton-base);
+  }
+}

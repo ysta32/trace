@@ -1,0 +1,319 @@
+/* ==========================================================================
+   PLOTTER — Trace design tokens (contract). See DESIGN.md + design/README.md.
+   Raw scales (--p-*) are private; components use semantic tokens only.
+   Theme: light default, dark via prefers-color-scheme unless [data-theme]
+   forces one. [data-theme="light"|"dark"] on <html> wins.
+   ========================================================================== */
+
+:root {
+  /* ---- Raw: warm paper → ink neutral ramp (hue ~60°, low chroma) ---- */
+  --p-paper-0: #fbfaf6;
+  --p-paper-1: #f4f1ea;
+  --p-paper-2: #ebe7dd;
+  --p-paper-3: #dfdacd;
+  --p-stone-4: #c9c3b4;
+  --p-stone-5: #a39d8f;
+  --p-stone-6: #7a756a;
+  --p-stone-7: #57534b;
+  --p-ink-8: #34312c;
+  --p-ink-9: #23211e;
+  --p-ink-10: #1a1917;
+  --p-ink-11: #131211;
+  --p-ink-12: #0d0c0b;
+
+  /* ---- Raw: signal (vermilion / safety orange) ---- */
+  --p-signal-300: #ffb08f;
+  --p-signal-400: #ff7a45;
+  --p-signal-500: #ff5a1f; /* THE accent. One per screen region. */
+  --p-signal-600: #e0440c;
+  --p-signal-700: #b5360a; /* text-safe on paper (≥4.5:1) */
+
+  /* ---- Raw: status (kept distinct from signal) ---- */
+  --p-ok: #2f7d4a;
+  --p-ok-dark: #5cc27f;
+  --p-warn: #a86a00;
+  --p-warn-dark: #f0b34a;
+  --p-err: #c11f3a;
+  --p-err-dark: #ff6b80;
+  --p-info: #3d5a73; /* slate, not SaaS blue */
+  --p-info-dark: #9db6cc;
+
+  /* ---- Typography ---- */
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-display: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+
+  /* UI scale (app). Dense, 13px base like pro tools. */
+  --text-2xs: 0.625rem;   /* 10 — mono labels, axis ticks */
+  --text-xs: 0.6875rem;   /* 11 — readouts, kbd, captions */
+  --text-sm: 0.75rem;     /* 12 — inspector rows */
+  --text-md: 0.8125rem;   /* 13 — app body */
+  --text-base: 0.9375rem; /* 15 — marketing body */
+  --text-lg: 1.125rem;    /* 18 */
+  --text-xl: 1.5rem;      /* 24 */
+  --text-2xl: 2rem;       /* 32 */
+  --text-3xl: 3rem;       /* 48 */
+  --text-4xl: clamp(3rem, 2rem + 5vw, 6rem);   /* marketing display */
+  --text-5xl: clamp(4rem, 2rem + 9vw, 10rem);  /* hero numeral / wordmark */
+
+  --leading-tight: 1.05;
+  --leading-snug: 1.25;
+  --leading-normal: 1.45;
+  --leading-relaxed: 1.6;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --tracking-tight: -0.02em;
+  --tracking-display: -0.035em;
+  --tracking-label: 0.06em; /* mono uppercase labels */
+
+  /* ---- Spacing (4px base; 2 for hairline nudges) ---- */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+
+  /* ---- Radii: tight, machined. Nothing pill-shaped except toggles/dots. ---- */
+  --radius-0: 0;
+  --radius-xs: 2px;  /* swatches, kbd, tags */
+  --radius-sm: 4px;  /* buttons, inputs, segmented */
+  --radius-md: 6px;  /* popovers, menus, toasts */
+  --radius-lg: 10px; /* dialogs, command palette */
+  --radius-full: 999px;
+
+  /* ---- Control sizing ---- */
+  --control-h-sm: 24px;
+  --control-h-md: 28px;
+  --control-h-lg: 36px;
+  --rail-w: 48px;
+  --inspector-w: 296px;
+  --topbar-h: 44px;
+  --statusbar-h: 26px;
+
+  /* ---- Z ---- */
+  --z-base: 0;
+  --z-canvas-overlay: 10;
+  --z-chrome: 20;
+  --z-dropdown: 40;
+  --z-sticky: 50;
+  --z-overlay: 60;
+  --z-dialog: 70;
+  --z-palette: 80;
+  --z-toast: 90;
+  --z-tooltip: 100;
+
+  /* ---- Motion ---- */
+  --dur-instant: 60ms;   /* hover, press */
+  --dur-fast: 120ms;     /* tooltips, toggles, segmented thumb */
+  --dur-base: 180ms;     /* popovers, inspector sections */
+  --dur-slow: 280ms;     /* dialogs, toasts, panel slide */
+  --dur-deliberate: 480ms; /* result reveal / "plot" draw-on */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);      /* default: things arriving */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);           /* things leaving */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);   /* moves between two states */
+  --ease-detent: cubic-bezier(0.3, 1.4, 0.5, 1);   /* tiny overshoot: toggles, thumbs. ≤ 4px travel only */
+  --ease-linear: linear;
+
+  /* ---- Focus ---- */
+  --focus-width: 2px;
+  --focus-offset: 2px;
+
+  /* ======================= Semantic: LIGHT ======================= */
+  color-scheme: light;
+  --bg-app: var(--p-paper-1);         /* chrome behind panels */
+  --bg-panel: var(--p-paper-0);       /* rail, inspector, cards */
+  --bg-sunken: var(--p-paper-2);      /* inputs, tracks, wells */
+  --bg-raised: #ffffff;               /* popovers, dialogs, menus */
+  --bg-hover: rgba(35, 33, 30, 0.06);
+  --bg-active: rgba(35, 33, 30, 0.1);
+  --bg-selected: rgba(255, 90, 31, 0.12);
+  --bg-inverse: var(--p-ink-10);
+  --bg-canvas: var(--p-paper-2);
+  --canvas-check-a: #ece8df;
+  --canvas-check-b: #f7f5f0;
+
+  --fg-primary: var(--p-ink-10);
+  --fg-secondary: var(--p-stone-7);
+  --fg-tertiary: var(--p-stone-6);
+  --fg-disabled: var(--p-stone-5);
+  --fg-inverse: var(--p-paper-0);
+  --fg-on-accent: #160803;
+
+  --border-hairline: rgba(35, 33, 30, 0.1);
+  --border-default: rgba(35, 33, 30, 0.16);
+  --border-strong: rgba(35, 33, 30, 0.32);
+  --border-ink: var(--p-ink-10);
+
+  --accent: var(--p-signal-500);
+  --accent-hover: var(--p-signal-600);
+  --accent-press: var(--p-signal-700);
+  --accent-fg: var(--p-signal-700);   /* accent as text/icon on paper */
+  --accent-soft: rgba(255, 90, 31, 0.12);
+
+  --ok: var(--p-ok);
+  --warn: var(--p-warn);
+  --err: var(--p-err);
+  --info: var(--p-info);
+  --ok-soft: rgba(47, 125, 74, 0.12);
+  --warn-soft: rgba(168, 106, 0, 0.12);
+  --err-soft: rgba(193, 31, 58, 0.1);
+  --info-soft: rgba(61, 90, 115, 0.1);
+
+  /* Diff lens ramp: 0 error → max error (perceptually ordered, not rainbow) */
+  --diff-0: rgba(255, 90, 31, 0);
+  --diff-1: rgba(255, 176, 143, 0.55);
+  --diff-2: rgba(255, 90, 31, 0.75);
+  --diff-3: rgba(193, 31, 58, 0.9);
+
+  --selection-bg: rgba(255, 90, 31, 0.22);
+  --focus-ring: var(--p-signal-500);
+  --scrim: rgba(19, 18, 17, 0.36);
+  --skeleton-base: var(--p-paper-2);
+  --skeleton-shine: var(--p-paper-0);
+
+  /* Elevation: hairline + short ambient. Shadows are warm (ink), never blue. */
+  --shadow-0: none;
+  --shadow-1: 0 0 0 1px var(--border-hairline), 0 1px 2px rgba(35, 33, 30, 0.06);
+  --shadow-2: 0 0 0 1px var(--border-default), 0 4px 12px -2px rgba(35, 33, 30, 0.12);
+  --shadow-3: 0 0 0 1px var(--border-default), 0 12px 32px -8px rgba(35, 33, 30, 0.22),
+    0 2px 6px rgba(35, 33, 30, 0.06);
+  --shadow-inset: inset 0 1px 0 rgba(35, 33, 30, 0.06);
+}
+
+/* ======================= Semantic: DARK ======================= */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg-app: var(--p-ink-12);
+    --bg-panel: var(--p-ink-11);
+    --bg-sunken: var(--p-ink-12);
+    --bg-raised: var(--p-ink-9);
+    --bg-hover: rgba(244, 241, 234, 0.06);
+    --bg-active: rgba(244, 241, 234, 0.1);
+    --bg-selected: rgba(255, 90, 31, 0.18);
+    --bg-inverse: var(--p-paper-1);
+    --bg-canvas: var(--p-ink-10);
+    --canvas-check-a: #1d1c1a;
+    --canvas-check-b: #252321;
+
+    --fg-primary: #ece8df;
+    --fg-secondary: #b3ad9f;
+    --fg-tertiary: #8a8478;
+    --fg-disabled: #5e5a52;
+    --fg-inverse: var(--p-ink-10);
+    --fg-on-accent: #160803;
+
+    --border-hairline: rgba(244, 241, 234, 0.07);
+    --border-default: rgba(244, 241, 234, 0.12);
+    --border-strong: rgba(244, 241, 234, 0.24);
+    --border-ink: #ece8df;
+
+    --accent: var(--p-signal-500);
+    --accent-hover: var(--p-signal-400);
+    --accent-press: var(--p-signal-600);
+    --accent-fg: var(--p-signal-400);
+    --accent-soft: rgba(255, 90, 31, 0.16);
+
+    --ok: var(--p-ok-dark);
+    --warn: var(--p-warn-dark);
+    --err: var(--p-err-dark);
+    --info: var(--p-info-dark);
+    --ok-soft: rgba(92, 194, 127, 0.14);
+    --warn-soft: rgba(240, 179, 74, 0.14);
+    --err-soft: rgba(255, 107, 128, 0.14);
+    --info-soft: rgba(157, 182, 204, 0.12);
+
+    --selection-bg: rgba(255, 90, 31, 0.32);
+    --focus-ring: var(--p-signal-400);
+    --scrim: rgba(0, 0, 0, 0.56);
+    --skeleton-base: var(--p-ink-9);
+    --skeleton-shine: var(--p-ink-8);
+
+    --shadow-1: 0 0 0 1px var(--border-hairline), 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 0 0 1px var(--border-default), 0 6px 16px -4px rgba(0, 0, 0, 0.5);
+    --shadow-3: 0 0 0 1px var(--border-default), 0 16px 40px -8px rgba(0, 0, 0, 0.6),
+      0 2px 6px rgba(0, 0, 0, 0.3);
+    --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-app: var(--p-ink-12);
+  --bg-panel: var(--p-ink-11);
+  --bg-sunken: var(--p-ink-12);
+  --bg-raised: var(--p-ink-9);
+  --bg-hover: rgba(244, 241, 234, 0.06);
+  --bg-active: rgba(244, 241, 234, 0.1);
+  --bg-selected: rgba(255, 90, 31, 0.18);
+  --bg-inverse: var(--p-paper-1);
+  --bg-canvas: var(--p-ink-10);
+  --canvas-check-a: #1d1c1a;
+  --canvas-check-b: #252321;
+
+  --fg-primary: #ece8df;
+  --fg-secondary: #b3ad9f;
+  --fg-tertiary: #8a8478;
+  --fg-disabled: #5e5a52;
+  --fg-inverse: var(--p-ink-10);
+  --fg-on-accent: #160803;
+
+  --border-hairline: rgba(244, 241, 234, 0.07);
+  --border-default: rgba(244, 241, 234, 0.12);
+  --border-strong: rgba(244, 241, 234, 0.24);
+  --border-ink: #ece8df;
+
+  --accent: var(--p-signal-500);
+  --accent-hover: var(--p-signal-400);
+  --accent-press: var(--p-signal-600);
+  --accent-fg: var(--p-signal-400);
+  --accent-soft: rgba(255, 90, 31, 0.16);
+
+  --ok: var(--p-ok-dark);
+  --warn: var(--p-warn-dark);
+  --err: var(--p-err-dark);
+  --info: var(--p-info-dark);
+  --ok-soft: rgba(92, 194, 127, 0.14);
+  --warn-soft: rgba(240, 179, 74, 0.14);
+  --err-soft: rgba(255, 107, 128, 0.14);
+  --info-soft: rgba(157, 182, 204, 0.12);
+
+  --selection-bg: rgba(255, 90, 31, 0.32);
+  --focus-ring: var(--p-signal-400);
+  --scrim: rgba(0, 0, 0, 0.56);
+  --skeleton-base: var(--p-ink-9);
+  --skeleton-shine: var(--p-ink-8);
+
+  --shadow-1: 0 0 0 1px var(--border-hairline), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 0 0 1px var(--border-default), 0 6px 16px -4px rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 0 0 1px var(--border-default), 0 16px 40px -8px rgba(0, 0, 0, 0.6),
+    0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* Reduced motion: collapse durations; components still change state, just not animate travel. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0ms;
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+    --dur-deliberate: 0ms;
+    --ease-detent: var(--ease-out);
+  }
+}

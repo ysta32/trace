@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 target/
 dist/
 pkg/
@@ -8,3 +8,4 @@ pkg/
 bench/out/
 *.log
 .DS_Store
+packages/trace-vectorizer/wasm/
