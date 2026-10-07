@@ -1,7 +1,7 @@
 import { availableParallelism } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   CliError, HELP, IMAGE_EXT, formatFromPath, globToRegExp, hasGlob, outputName, parseCli,
@@ -27,14 +27,24 @@ async function isDir(p: string): Promise<boolean> {
   try { return (await stat(p)).isDirectory(); } catch { return false; }
 }
 
-async function walkImages(dir: string): Promise<string[]> {
+async function walkImages(dir: string, recursive = false): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
-  return entries.filter(e => e.isFile() && IMAGE_EXT.test(e.name)).map(e => join(dir, e.name)).sort();
+  const files = entries.filter(e => e.isFile() && IMAGE_EXT.test(e.name)).map(e => join(dir, e.name));
+  if (recursive) {
+    for (const e of entries.filter(x => x.isDirectory())) files.push(...await walkImages(join(dir, e.name), true));
+  }
+  return files.sort();
 }
 
 /** Expand files, directories (non-recursive) and simple globs (* and ? in the last segment). */
-export async function expandInputs(inputs: string[]): Promise<string[]> {
+export async function expandInputs(inputs: string[], batch?: string): Promise<string[]> {
   const out: string[] = [];
+  if (batch !== undefined) {
+    if (!(await isDir(batch))) throw new CliError(`--batch: not a directory: ${batch}`, 1);
+    const files = await walkImages(batch, true);
+    if (files.length === 0) throw new CliError(`No images found under: ${batch}`, 1);
+    out.push(...files);
+  }
   for (const input of inputs) {
     if (input === '-') out.push(input);
     else if (await isDir(input)) {
@@ -60,16 +70,36 @@ export function planJobs(files: string[], cfg: CliConfig, format: Format): Job[]
   }
   const stdinCount = files.filter(f => f === '-').length;
   if (stdinCount > 1) throw new CliError('stdin ("-") can only be given once');
-  return files.map(input => {
-    if (cfg.out !== undefined) return { input, output: cfg.out === '-' ? undefined : cfg.out };
-    if (cfg.outDir !== undefined) {
-      if (input === '-') throw new CliError('stdin input needs -o; --out-dir cannot name the file');
-      return { input, output: join(cfg.outDir, outputName(input, format)) };
+  const base = files.map(input => ({ input, output: planOne(input, cfg, format, false) }));
+  // Same output path for several inputs (a.png + a.jpg, or equal basenames): suffix with the source extension.
+  const counts = new Map<string, number>();
+  for (const j of base) if (j.output) counts.set(resolve(j.output), (counts.get(resolve(j.output)) ?? 0) + 1);
+  const jobs = base.map(j => (j.output && (counts.get(resolve(j.output)) ?? 0) > 1
+    ? { input: j.input, output: planOne(j.input, cfg, format, true) } : j));
+  const seen = new Set<string>();
+  for (const j of jobs) {
+    if (!j.output) continue;
+    const key = resolve(j.output);
+    if (seen.has(key)) throw new CliError(`several inputs would write the same output file: ${j.output}`);
+    seen.add(key);
+  }
+  const sources = new Set(files.filter(f => f !== '-').map(f => resolve(f)));
+  for (const j of jobs) {
+    if (j.output && sources.has(resolve(j.output))) {
+      throw new CliError(`output ${j.output} would overwrite the input file; choose another -o, --out-dir or --format`);
     }
-    if (input === '-') return { input, output: undefined };
-    if (cfg.json) return { input, output: undefined };
-    return { input, output: join(dirname(input), outputName(input, format)) };
-  });
+  }
+  return jobs;
+}
+
+function planOne(input: string, cfg: CliConfig, format: Format, disambiguate: boolean): string | undefined {
+  if (cfg.out !== undefined) return cfg.out === '-' ? undefined : cfg.out;
+  if (cfg.outDir !== undefined) {
+    if (input === '-') throw new CliError('stdin input needs -o; --out-dir cannot name the file');
+    return join(cfg.outDir, outputName(input, format, disambiguate));
+  }
+  if (input === '-' || cfg.json) return undefined;
+  return join(dirname(input), outputName(input, format, disambiguate));
 }
 
 export async function renderPng(svg: string): Promise<Uint8Array> {
@@ -134,7 +164,7 @@ export async function run(argv: string[], io: Io, engine?: Engine, version = rea
 
   let jobs: Job[];
   try {
-    const files = await expandInputs(cfg.inputs);
+    const files = await expandInputs(cfg.inputs, cfg.batch);
     const format = cfg.format ?? (cfg.out && cfg.out !== '-' ? formatFromPath(cfg.out) : undefined) ?? 'svg';
     jobs = planJobs(files, cfg, format);
     cfg = { ...cfg, format };

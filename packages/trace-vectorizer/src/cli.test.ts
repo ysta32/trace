@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile, readdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -139,12 +139,66 @@ describe('run (stub engine)', () => {
     await run(['-', '--stats', '-q'], b.io, engine);
     expect(b.err()).toBe('');
   });
-  it('png without resvg gives a clear error or a PNG', async () => {
+  it('rejects outputs that would overwrite an input', async () => {
+    const d = await mkdtemp(join(tmpdir(), 'tv-'));
+    await writeFile(join(d, 'a.png'), 'x');
     const t = mkIo();
-    const code = await run(['-', '-f', 'png', '-o', '-'], t.io, engine);
-    if (code !== 0) expect(t.err()).toContain('@resvg/resvg-js');
-    else expect((t.out[0] as Uint8Array)[1]).toBe(0x50);
+    expect(await run([join(d, 'a.png'), '--format', 'png'], t.io, engine)).toBe(2);
+    expect(t.err()).toContain('overwrite the input');
+    expect(await readFile(join(d, 'a.png'), 'utf8')).toBe('x');
+    const u = mkIo();
+    expect(await run([join(d, 'a.png'), '-o', join(d, 'a.png'), '-f', 'png'], u.io, engine)).toBe(2);
   });
+  it('disambiguates same-stem inputs', async () => {
+    const d = await mkdtemp(join(tmpdir(), 'tv-'));
+    await writeFile(join(d, 'a.png'), 'x');
+    await writeFile(join(d, 'a.jpg'), 'x');
+    const t = mkIo();
+    expect(await run([join(d, 'a.png'), join(d, 'a.jpg')], t.io, engine)).toBe(0);
+    expect((await readdir(d)).sort()).toEqual(['a-jpg.svg', 'a-png.svg', 'a.jpg', 'a.png']);
+  });
+  it('errors when disambiguation cannot separate outputs', () => {
+    const cfg = parseCli(['x/a.png', 'y/a.png', '--out-dir', 'o']);
+    expect(() => planJobs(['x/a.png', 'y/a.png'], cfg, 'svg')).toThrow(/same output/);
+  });
+  it('--batch traces a directory recursively', async () => {
+    const d = await mkdtemp(join(tmpdir(), 'tv-'));
+    await mkdir(join(d, 'in', 'sub'), { recursive: true });
+    await writeFile(join(d, 'in', 'a.png'), 'x');
+    await writeFile(join(d, 'in', 'sub', 'b.png'), 'x');
+    await writeFile(join(d, 'in', 'sub', 'n.txt'), 'x');
+    expect(parseCli(['--batch', 'in']).batch).toBe('in');
+    expect(await expandInputs([], join(d, 'in'))).toEqual([join(d, 'in', 'a.png'), join(d, 'in', 'sub', 'b.png')]);
+    const t = mkIo();
+    expect(await run(['--batch', join(d, 'in'), '--out-dir', join(d, 'out')], t.io, engine)).toBe(0);
+    expect((await readdir(join(d, 'out'))).sort()).toEqual(['a.svg', 'b.svg']);
+    const u = mkIo();
+    expect(await run(['--batch', join(d, 'nope')], u.io, engine)).toBe(1);
+  });
+});
+
+const hasResvg = await import('@resvg/resvg-js').then(() => true, () => false);
+
+describe(hasResvg ? 'png output (resvg available)' : 'png output (resvg missing)', () => {
+  if (hasResvg) {
+    it('writes a valid PNG with the traced dimensions', async () => {
+      const d = await mkdtemp(join(tmpdir(), 'tv-'));
+      const out = join(d, 'o.png');
+      const t = mkIo();
+      expect(await run(['-', '-o', out], t.io, engine)).toBe(0);
+      const b = await readFile(out);
+      expect([...b.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+      expect(b.subarray(12, 16).toString()).toBe('IHDR');
+      expect(b.readUInt32BE(16)).toBe(fake.width);
+      expect(b.readUInt32BE(20)).toBe(fake.height);
+    });
+  } else {
+    it('exits 1 with install guidance', async () => {
+      const t = mkIo();
+      expect(await run(['-', '-f', 'png', '-o', '-'], t.io, engine)).toBe(1);
+      expect(t.err()).toContain('npm install @resvg/resvg-js');
+    });
+  }
 });
 
 describe('e2e (real engine)', () => {

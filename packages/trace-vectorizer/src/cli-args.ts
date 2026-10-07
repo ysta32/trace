@@ -15,6 +15,7 @@ export class CliError extends Error {
 
 export interface CliConfig {
   inputs: string[];
+  batch?: string;
   out?: string;
   outDir?: string;
   format?: Format;
@@ -31,9 +32,11 @@ export const HELP = `tracevec - convert raster images to clean vector graphics
 
 Usage:
   tracevec <input...|dir> [options]
+  tracevec --batch <dir> --out-dir <dir>   (recursive)
   cat in.png | tracevec - -o out.svg
 
 Output:
+      --batch <dir>       Trace every image under <dir>, recursively
   -o, --out <file>        Output file ("-" for stdout). Single input only.
       --out-dir <dir>     Output directory for batch conversion
   -f, --format <fmt>      svg | pdf | eps | dxf | png (default: from -o extension, else svg)
@@ -94,6 +97,7 @@ export function parseCli(argv: string[]): CliConfig {
       allowPositionals: true,
       options: {
         out: { type: 'string', short: 'o' },
+        batch: { type: 'string' },
         'out-dir': { type: 'string' },
         format: { type: 'string', short: 'f' },
         preset: { type: 'string' },
@@ -119,6 +123,7 @@ export function parseCli(argv: string[]): CliConfig {
   const v = parsed.values;
   const cfg: CliConfig = {
     inputs: parsed.positionals,
+    batch: v.batch,
     out: v.out,
     outDir: v['out-dir'],
     trace: {},
@@ -155,7 +160,7 @@ export function parseCli(argv: string[]): CliConfig {
   if (v.gradients) t.gradients = true;
   if (v.precision !== undefined) cfg.precision = num('precision', v.precision, 0, 15, true);
 
-  if (cfg.inputs.length === 0) throw new CliError('No input given. Run "tracevec --help" for usage.');
+  if (cfg.inputs.length === 0 && cfg.batch === undefined) throw new CliError('No input given. Run "tracevec --help" for usage.');
   if (cfg.out !== undefined && cfg.outDir !== undefined) throw new CliError('Use either -o/--out or --out-dir, not both');
   if (cfg.out === '') throw new CliError('-o/--out: empty path');
   if (cfg.out !== undefined) {
@@ -169,10 +174,11 @@ export function parseCli(argv: string[]): CliConfig {
 }
 
 /** Output path for one input in batch mode (extension replaced by the format). */
-export function outputName(input: string, format: Format): string {
+export function outputName(input: string, format: Format, disambiguate = false): string {
   const base = input.replace(/\\/g, '/').split('/').pop() ?? input;
   const stem = base.replace(/\.[^.]*$/, '') || base;
-  return `${stem}.${format}`;
+  const ext = /\.([^.]+)$/.exec(base)?.[1]?.toLowerCase();
+  return disambiguate && ext ? `${stem}-${ext}.${format}` : `${stem}.${format}`;
 }
 
 export const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;

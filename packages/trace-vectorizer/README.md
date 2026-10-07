@@ -37,6 +37,7 @@ npx tracevec logo.png --json --stats        # TraceResult as JSON on stdout, sta
 | --- | --- |
 | `<input...>` | Files, directories (non-recursive), simple globs, or `-` for stdin |
 | `-o, --out <file>` | Output file (`-` for stdout). Single input only. The format is inferred from the extension |
+| `--batch <dir>` | Trace every image under a directory, recursively (use with `--out-dir`) |
 | `--out-dir <dir>` | Output directory for batches (created if missing) |
 | `-f, --format` | `svg` (default), `pdf`, `eps`, `dxf`, `png` |
 | `--preset` | `auto`, `logo`, `lineart`, `pixelart`, `photo`, `icon` |
@@ -53,6 +54,8 @@ npx tracevec logo.png --json --stats        # TraceResult as JSON on stdout, sta
 | `--stats` | Print path/node/color counts and timing to stderr |
 | `-q, --quiet` | Suppress progress and stats |
 | `-h`, `-v` | Help, version |
+
+If several inputs would produce the same output file (for example `a.png` and `a.jpg`), the source extension is added to the name (`a-png.svg`, `a-jpg.svg`). If that still collides (same file name in different folders under one `--out-dir`), the CLI exits with an error. An output path equal to an input file is always rejected (exit 2), e.g. `tracevec a.png --format png`.
 
 Batches run up to `min(4, available CPUs)` files at a time and print a progress line per file on stderr. Exit codes: `0` success, `1` at least one file failed (the rest are still processed), `2` usage error.
 
