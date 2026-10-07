@@ -98,22 +98,49 @@ export async function searchBudget(
 
 let fitWorker: Worker | null = null;
 let fitSeq = 1_000_000;
+let fitGen = 0;
+const pending = new Map<number, { resolve: (r: TraceResult) => void; reject: (e: Error) => void }>();
+
+function resetWorker(reason: string): void {
+  const w = fitWorker;
+  fitWorker = null;
+  w?.terminate();
+  const err = new Error(reason);
+  for (const p of pending.values()) p.reject(err);
+  pending.clear();
+}
+
+function getFitWorker(): Worker {
+  if (fitWorker) return fitWorker;
+  const w = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+  w.onmessage = (e: MessageEvent<WorkerResponse>) => {
+    const p = pending.get(e.data.id);
+    if (!p) return;
+    pending.delete(e.data.id);
+    if (e.data.kind === 'trace') p.resolve(e.data.result);
+    else if (e.data.kind === 'error') p.reject(new Error(e.data.message));
+  };
+  w.onerror = (e) => resetWorker(e.message || 'Worker failed to load');
+  w.onmessageerror = () => resetWorker('Worker sent an unreadable message');
+  fitWorker = w;
+  return w;
+}
 
 function runInWorker(bytes: Uint8Array, o: TraceOptions): Promise<TraceResult> {
-  fitWorker ??= new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
-  const w = fitWorker;
+  const w = getFitWorker();
   const id = fitSeq++;
   return new Promise((resolve, reject) => {
-    const onMsg = (e: MessageEvent<WorkerResponse>) => {
-      if (e.data.id !== id) return;
-      w.removeEventListener('message', onMsg);
-      if (e.data.kind === 'trace') resolve(e.data.result);
-      else if (e.data.kind === 'error') reject(new Error(e.data.message));
-    };
-    w.addEventListener('message', onMsg);
+    pending.set(id, { resolve, reject });
     const req: WorkerRequest = { kind: 'trace', id, bytes: bytes.slice(), opts: o };
     w.postMessage(req);
   });
+}
+
+/** Cancel any running search; its result is discarded and the worker is released. */
+export function cancelFit(): void {
+  fitGen++;
+  resetWorker('Fit cancelled');
+  if (fitStatus.value === 'fitting') fitStatus.value = 'idle';
 }
 
 /** Tune simplify, then colors, to hit the current budget; applies the result to the editor options. */
@@ -121,17 +148,29 @@ export async function fitToBudget(precision = 2): Promise<FitOutcome | null> {
   const b = budget.value;
   const img = image.value;
   if (!b || !img || fitStatus.value === 'fitting') return null;
+  const gen = ++fitGen;
+  const live = () => gen === fitGen;
   fitStatus.value = 'fitting';
   fitTraces.value = 0;
   try {
     const base = opts.value;
     const baseColors = typeof base.colors === 'number' ? base.colors : 16;
-    const out = await searchBudget(base, b, (o) => runInWorker(img.bytes, o), baseColors, precision, (n) => { fitTraces.value = n; });
+    const out = await searchBudget(
+      base, b,
+      async (o) => {
+        const r = await runInWorker(img.bytes, o);
+        if (!live()) throw new Error('Fit cancelled');
+        return r;
+      },
+      baseColors, precision,
+      (n) => { if (live()) fitTraces.value = n; },
+    );
+    if (!live()) return null;
     setOpts(out.opts);
     fitStatus.value = out.status;
     return out;
   } catch {
-    fitStatus.value = 'error';
+    if (live()) fitStatus.value = 'error';
     return null;
   }
 }

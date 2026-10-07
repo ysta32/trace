@@ -132,6 +132,6 @@ async function copy(text: string, ok: string): Promise<boolean> {
 }
 
 export const copySvg = () => (result.value ? copy(svgText.value, 'SVG copied') : Promise.resolve(false));
-export const cliText = computed(() => toCliCommand(opts.value, filename.value, exportFormat.value, precision.value));
+export const cliText = computed(() => toCliCommand(opts.value, filename.value, exportFormat.value, image.value?.name ?? 'image.png', precision.value));
 export const copyCli = () => copy(cliText.value, 'CLI command copied');
 export const copyPresetJson = () => copy(toPresetJson(opts.value, precision.value), 'Preset JSON copied');

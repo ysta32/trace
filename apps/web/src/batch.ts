@@ -62,14 +62,14 @@ export function batchProgress(items: BatchItem[]): BatchProgress {
 
 /** Unique zip entry names: `logo.svg`, `logo-2.svg`... */
 export function uniqueNames(names: string[], format: string): string[] {
-  const seen = new Map<string, number>();
+  const used = new Set<string>();
   return names.map((n) => {
     const base = deriveFilename(n, format);
-    const c = (seen.get(base) ?? 0) + 1;
-    seen.set(base, c);
-    if (c === 1) return base;
     const dot = base.lastIndexOf('.');
-    return `${base.slice(0, dot)}-${c}${base.slice(dot)}`;
+    let candidate = base;
+    for (let c = 2; used.has(candidate.toLowerCase()); c++) candidate = `${base.slice(0, dot)}-${c}${base.slice(dot)}`;
+    used.add(candidate.toLowerCase());
+    return candidate;
   });
 }
 
@@ -144,14 +144,12 @@ function pump(): void {
 export async function addFiles(list: File[]): Promise<void> {
   const imgs = list.filter((f) => isImageName(f.name) || f.type.startsWith('image/'));
   if (imgs.length === 0) return;
-  const startId = batch.value.nextId;
-  dispatch({ type: 'add', names: imgs.map((f) => f.name) });
   const snapshot = { ...opts.value };
-  await Promise.all(imgs.map(async (f, i) => {
-    const id = startId + i;
-    files.set(id, new Uint8Array(await f.arrayBuffer()));
-    jobOpts.set(id, snapshot);
-  }));
+  // Read every file before queueing so a running pump never sees an item without bytes.
+  const loaded = await Promise.all(imgs.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
+  const startId = batch.value.nextId;
+  loaded.forEach((l, i) => { files.set(startId + i, l.bytes); jobOpts.set(startId + i, snapshot); });
+  dispatch({ type: 'add', names: loaded.map((l) => l.name) });
   pump();
 }
 

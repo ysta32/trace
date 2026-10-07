@@ -25,12 +25,12 @@ export function deriveFilename(imageName: string, format: string): string {
 
 /**
  * Build the `npx trace-vectorizer` command that reproduces the editor state.
- * `filename` is the output name (its extension decides the format); only non-default flags are emitted.
+ * `inputName` is the original image file name; `outFilename` goes to -o. Only non-default flags are emitted.
  */
-export function toCliCommand(opts: TraceOptions, filename: string, format: string, precision: number = DEFAULTS.precision): string {
+export function toCliCommand(opts: TraceOptions, outFilename: string, format: string, inputName: string, precision: number = DEFAULTS.precision): string {
   const fmt = format.toLowerCase();
-  const out = `${baseName(filename)}.${fmt}`;
-  const input = `${baseName(filename)}.png`;
+  const out = outFilename || deriveFilename(inputName, fmt);
+  const input = inputName;
   const args: string[] = ['npx', 'trace-vectorizer', shellQuote(input)];
   const flag = (name: string, value: string | number) => args.push(`--${name}`, shellQuote(String(value)));
 

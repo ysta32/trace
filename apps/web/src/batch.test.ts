@@ -57,6 +57,11 @@ describe('helpers', () => {
   it('dedupes zip names', () => {
     expect(uniqueNames(['logo.png', 'sub/logo.jpg', 'x.png'], 'svg')).toEqual(['logo.svg', 'logo-2.svg', 'x.svg']);
   });
+  it('never reuses a suffixed name', () => {
+    const out = uniqueNames(['logo.png', 'logo.jpg', 'logo-2.png'], 'svg');
+    expect(new Set(out).size).toBe(3);
+    expect(out).toEqual(['logo.svg', 'logo-2.svg', 'logo-2-2.svg']);
+  });
   it('concurrency is min(4, cores-1), at least 1', () => {
     expect(concurrency(16)).toBe(4);
     expect(concurrency(4)).toBe(3);

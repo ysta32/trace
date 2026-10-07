@@ -1,7 +1,7 @@
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import { result } from '../store';
 import { svgBytes } from '../svgView';
-import { budget, fitStatus, fitTraces, fitToBudget, gaugeRatio, MAX_TRACES, type BudgetUnit } from '../budget';
+import { budget, fitStatus, fitTraces, fitToBudget, cancelFit, gaugeRatio, MAX_TRACES, type BudgetUnit } from '../budget';
 import { Icon } from '../design/icons';
 import '../export-extras.css';
 
@@ -11,6 +11,7 @@ function fmt(n: number, unit: BudgetUnit): string {
 
 export function BudgetGauge() {
   const [open, setOpen] = useState(false);
+  useEffect(() => cancelFit, []);
   const b = budget.value;
   const r = result.value;
   const unit = b?.unit ?? 'kb';
@@ -21,6 +22,7 @@ export function BudgetGauge() {
 
   const setTarget = (raw: string) => {
     const n = Number(raw);
+    if (!(Number.isFinite(n) && n > 0)) cancelFit();
     budget.value = Number.isFinite(n) && n > 0 ? { unit, target: n } : null;
   };
 
@@ -64,7 +66,7 @@ export function BudgetGauge() {
             {fitStatus.value === 'error' && 'Fit failed. Try again.'}
             {fitStatus.value === 'idle' && 'Trace tunes simplify, then colors, to land under the target.'}
           </p>
-          {b && <button type="button" class="xp-btn ghost" onClick={() => { budget.value = null; fitStatus.value = 'idle'; }}>Clear budget</button>}
+          {b && <button type="button" class="xp-btn ghost" onClick={() => { cancelFit(); budget.value = null; fitStatus.value = 'idle'; }}>Clear budget</button>}
         </div>
       )}
     </div>

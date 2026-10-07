@@ -3,24 +3,25 @@ import { toCliCommand, deriveFilename, shellQuote, baseName } from './cliCommand
 
 describe('toCliCommand', () => {
   it('omits defaults', () => {
-    expect(toCliCommand({ preset: 'auto', colors: 'auto', denoise: 0.2, simplify: 0.5, mode: 'stacked', gradients: false }, 'logo.svg', 'svg'))
+    expect(toCliCommand({ preset: 'auto', colors: 'auto', denoise: 0.2, simplify: 0.5, mode: 'stacked', gradients: false }, 'logo.svg', 'svg', 'logo.png'))
       .toBe('npx trace-vectorizer logo.png -o logo.svg');
   });
   it('emits only non-default flags', () => {
-    expect(toCliCommand({ preset: 'logo', colors: 6, simplify: 0.4 }, 'logo.svg', 'svg'))
+    expect(toCliCommand({ preset: 'logo', colors: 6, simplify: 0.4 }, 'logo.svg', 'svg', 'logo.png'))
       .toBe('npx trace-vectorizer logo.png --preset logo --colors 6 --simplify 0.4 -o logo.svg');
   });
   it('quotes the palette and prefers it over colors', () => {
-    const c = toCliCommand({ colors: 4, palette: ['#ff0000', '#00ff00'] }, 'a.svg', 'svg');
+    const c = toCliCommand({ colors: 4, palette: ['#ff0000', '#00ff00'] }, 'a.svg', 'svg', 'a.png');
     expect(c).toContain(`--palette '#ff0000,#00ff00'`);
     expect(c).not.toContain('--colors');
   });
   it('handles mode, gradients, corner, speckle, precision', () => {
-    const c = toCliCommand({ mode: 'cutout', gradients: true, cornerThreshold: 45, filterSpeckle: 8, denoise: 0.4 }, 'x.pdf', 'pdf', 3);
-    expect(c).toBe('npx trace-vectorizer x.png --denoise 0.4 --mode cutout --gradients --corner 45 --speckle 8 --precision 3 -o x.pdf');
+    const c = toCliCommand({ mode: 'cutout', gradients: true, cornerThreshold: 45, filterSpeckle: 8, denoise: 0.4 }, 'x.pdf', 'pdf', 'x.jpg', 3);
+    expect(c).toBe('npx trace-vectorizer x.jpg --denoise 0.4 --mode cutout --gradients --corner 45 --speckle 8 --precision 3 -o x.pdf');
   });
   it('quotes awkward names', () => {
-    expect(toCliCommand({}, "my it's.svg", 'svg')).toContain('-o my-it_s.svg');
+    const c = toCliCommand({}, 'my out.svg', 'svg', "my it's photo.png");
+    expect(c).toBe(`npx trace-vectorizer 'my it'\\''s photo.png' -o 'my out.svg'`);
   });
 });
 
