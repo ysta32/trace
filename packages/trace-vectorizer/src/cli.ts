@@ -136,11 +136,10 @@ export function formatStats(name: string, r: TraceResult): string {
 }
 
 async function pool<T>(items: T[], limit: number, fn: (item: T, i: number) => Promise<void>): Promise<void> {
-  let next = 0;
+  const entries = items.entries();
   const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      await fn(items[i], i);
+    for (const [i, item] of entries) {
+      await fn(item, i);
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));

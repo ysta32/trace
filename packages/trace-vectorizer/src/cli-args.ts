@@ -76,7 +76,7 @@ export function parsePalette(raw: string): string[] {
   if (parts.length < 1) throw new CliError('--palette: expected a comma-separated list of colors');
   return parts.map(p => {
     const m = /^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.exec(p);
-    if (!m) throw new CliError(`--palette: invalid color "${p}" (use #rgb or #rrggbb)`);
+    if (m?.[1] === undefined) throw new CliError(`--palette: invalid color "${p}" (use #rgb or #rrggbb)`);
     let h = m[1].toLowerCase();
     if (h.length === 3) h = [...h].map(c => c + c).join('');
     return `#${h}`;
@@ -85,7 +85,7 @@ export function parsePalette(raw: string): string[] {
 
 export function formatFromPath(path: string): Format | undefined {
   const m = /\.([a-z0-9]+)$/i.exec(path);
-  const ext = m?.[1].toLowerCase();
+  const ext = m?.[1]?.toLowerCase();
   return (FORMATS as readonly string[]).includes(ext ?? '') ? (ext as Format) : undefined;
 }
 

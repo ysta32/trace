@@ -206,7 +206,15 @@ describe('e2e (real engine)', () => {
     // 2x2 red/blue PNG generated inline.
     const { deflateSync } = await import('node:zlib');
     const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
-    const crc = (b: Buffer) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+    const crc = (b: Buffer) => {
+      let c = 0xffffffff;
+      for (const x of b) {
+        const entry = crcT[(c ^ x) & 255];
+        if (entry === undefined) throw new Error('Missing CRC table entry');
+        c = entry ^ (c >>> 8);
+      }
+      return (c ^ 0xffffffff) >>> 0;
+    };
     const chunk = (t: string, d: Buffer) => {
       const body = Buffer.concat([Buffer.from(t), d]);
       const len = Buffer.alloc(4); len.writeUInt32BE(d.length);
