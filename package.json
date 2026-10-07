@@ -1,0 +1,13 @@
+{
+  "name": "trace-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*", "apps/*", "bench"],
+  "scripts": {
+    "build:wasm": "wasm-pack build crates/trace-wasm --release --target web --out-dir ../../packages/trace-vectorizer/wasm --out-name trace_wasm && rm -f packages/trace-vectorizer/wasm/.gitignore",
+    "build": "npm run build:wasm && npm run build -w trace-vectorizer && npm run build -w @trace/web",
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "bench": "npm run bench -w @trace/bench"
+  }
+}
